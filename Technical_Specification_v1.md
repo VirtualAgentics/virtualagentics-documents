@@ -13,4 +13,151 @@ gpt_model: "Drafted by GPT-4.5 Deep Research"
 ## 1. Purpose and Scope
 
 This document defines the technical objectives, system requirements, and phased architectural approach for the Virtual Agentics project: an autonomous, AI-driven virtual enterprise built on cloud-native, agentic principles. The goal is to provide a reproducible blueprint for a modular, auditable, and revenue-generating AI business, with strict attention to automation, security, governance, and cost control.
-(…full content continues as above…)
+
+## 2. Project Goals and Objectives
+
+- **Create an autonomous multi-agent “virtual company”** capable of operating, adapting, and generating profit with minimal human oversight.
+- **Implement all infrastructure and application code as IaC (Infrastructure-as-Code),** versioned and managed through CI/CD pipelines.
+- **Emulate real-world corporate structure** with a CEO agent, C-level domain agents (e.g. CTO, CFO, CMO, CAgO), and department-specialized agents, all coordinated via event-driven protocols.
+- **Adopt a phased, modular roadmap** allowing stepwise, auditable growth—prioritizing core foundation and iterative capability addition.
+- **Enforce security, compliance, and auditability** as first principles, using strict naming conventions, role separation, and continuous monitoring.
+- **Demonstrate financial sustainability,** capping initial cloud spend (target: €1,000/month), with dynamic scale-up contingent on profitability and real value creation.
+- **Make the system open, extensible, and self-improving,** providing a reference model for others to replicate or extend.
+
+## 3. Architectural Overview
+
+### 3.1 High-Level System Design
+
+- The system is a **hierarchical, event-driven, multi-agent architecture** running on AWS (with hybrid/on-prem as needed), using Terraform and GitHub Actions for full automation.
+- Key architectural pillars:
+  - **Landing Zone and AWS Organization:** Control Tower-provisioned, with Management, Audit, Log Archive, and workload accounts segmented by OU and environment (prod, dev, sandbox, shared services).
+  - **Network Segmentation:** VPCs and subnets provisioned per the AWS Addressing Plan, using explicit CIDR blocks and subnet tiering (public/private/isolated).
+  - **Agentic Layer:** AI agents implemented as serverless microservices (AWS Lambda) and later, containerized workloads (EKS, Fargate) for more persistent roles.
+  - **State & Storage:** DynamoDB (single-table design), S3 buckets for content and artifacts, centralized Terraform state in S3 with DynamoDB locking.
+  - **Event & Communication Bus:** Agents communicate asynchronously using event buses (SNS/SQS, EventBridge) and direct invocation as required. Events and message schema defined for all inter-agent protocols.
+  - **Secrets & Credential Management:** AWS Secrets Manager is used for API keys and sensitive config, with rotation strategies defined.
+  - **Observability & Compliance:** CloudWatch for logs/metrics, CloudTrail for audit, Config for compliance checks, Cost Explorer/Budgets for spend management.
+  - **CI/CD Pipelines:** All changes (infra/app) deployed via GitHub Actions with OIDC-based role assumption; no static keys.
+
+### 3.2 Hierarchical Multi-Agent Model
+
+- **CEO Agent:** Sets high-level goals (e.g., “achieve €2K/month profit in 12 months”), approves strategic changes, reviews department outputs.
+- **C-Level Domain Agents:** CAgO (Chief Agent Officer, workforce), CTO (infrastructure/DevOps), CFO (finance/trading), CMO/Data (marketing/analytics), others as project evolves.
+- **Department Agents:** Specialized for HR (AI agent onboarding), R&D, Finance/Trading, Marketing, Compliance, and so on—each mapped to company-like workflows.
+- **Agent Protocols:** All agent tasks, escalations, and collaboration flows are defined via documented event contracts and state transitions.
+- **Memory & Learning:** Knowledge graph, vector DBs, and log-driven “organizational memory” are used for retrieval-augmented generation and long-term context.
+
+### 3.3 Phased Roadmap and Milestones
+
+| Phase  | Major Milestones                                                                                      |
+|--------|-------------------------------------------------------------------------------------------------------|
+| 1      | Landing zone, network, account structure, naming, baseline IAM, remote Terraform backend, CI/CD, MVP agent(s) |
+| 2      | Persistent data stores, advanced AI agent workflows, open-source model integration, SaaS/ML platform  |
+| 3      | Departmental agent expansion (Finance, R&D, etc.), trading/revenue agents, learning and optimization  |
+| 4      | Enterprise-scale, multi-cloud, high-availability, AI-driven self-improvement, regulatory readiness    |
+
+---
+
+## 4. Detailed Requirements by Subsystem
+
+### 4.1 AWS Landing Zone & Organization
+
+- **Tool:** AWS Control Tower
+- **Accounts:** Management, Audit, Log Archive, Prod, Dev, Sandbox, Shared Services
+- **Naming:** All accounts, OUs, and resources strictly follow the Naming Conventions guide (`va-[env]-[purpose]-acct`, etc.)
+- **Domains:** Email routing and domain management via Route53 and WorkMail (e.g., prod@virtualagentics.ai)
+- **SSO & Guardrails:** Centralized access (AWS SSO), baseline SCPs (region restrictions, MFA enforcement, etc.), AWS Config + CloudTrail org-level logging
+
+### 4.2 Network Architecture
+
+- **Addressing:** Explicit CIDR allocations for each VPC/subnet as per AWS_Addressing_Plan.md
+- **Subnet Tiering:** Public, private, and isolated subnets per AZ, tagged by environment and purpose
+- **Routing:** IGW for public, NAT for private, no external for isolated; route tables configured in Terraform
+- **DNS:** Private hosted zones for internal resolution, public for external endpoints; certificates managed in ACM
+
+### 4.3 Infrastructure-as-Code (Terraform)
+
+- **Project Structure:** Separate repositories for infra (`virtualagentics-iac`) and Lambda/app code (`virtualagentics-lambdas`)
+- **Remote State:** S3 bucket (`va-prod-terraform-state-bucket`), DynamoDB lock table (`va-prod-terraform-lock`)
+- **Modular Design:** Core modules for network, IAM, Lambda, DB, etc., following documented module layout
+- **Naming:** All resource names/tags from Naming_Conventions.md, with environment and function specificity
+
+### 4.4 IAM & Security
+
+- **IAM Roles:**  
+  - *Terraform Deploy:* `va-prod-core-terraform-iam-role`, trust via GitHub OIDC only, least privilege
+  - *Lambda Exec:* `va-prod-lambda-exec-iam-role`, permissions for CloudWatch, DynamoDB, S3, Secrets Manager
+- **Secrets:** All sensitive config in Secrets Manager, with policy-based access and rotation
+- **Encryption:** S3, DynamoDB, and other storages encrypted at rest (AWS-managed or CMK as per Compliance_Policies.md)
+- **Logging/Audit:** CloudTrail/Config enabled org-wide; logs centralized and monitored
+
+### 4.5 CI/CD Automation
+
+- **Infra Repo Workflow:** GitHub Actions for Terraform plan/apply, OIDC to AWS, branch protections on `main`
+- **App Repo Workflow:** GitHub Actions for Lambda packaging/test/deploy, role assumption via OIDC, updates Lambda code directly or via Terraform pipeline
+- **Environment Promotion:** Potential use of `dev` branch/environments for staging before production promotion (future)
+
+### 4.6 Application/Agent Layer
+
+- **MVP Agents:** Lambda-based content generator (e.g., for affiliate marketing), triggered by schedule/event or API Gateway
+- **Data Stores:**  
+  - *DynamoDB:* Single-table (PK/SK, on-demand, PITR enabled)
+  - *S3:* Content storage, static site hosting (if used), code artifacts
+- **Event Bus:** SNS/SQS/EventBridge for agent communication and task/event orchestration
+- **API Gateway:** (Optional, for agent-triggered actions or public endpoints)
+- **Runtime:** Python 3.11 (Phase 1), with clear guidance for handler structure, environment variables, and packaging
+
+### 4.7 Observability, Monitoring & Cost Control
+
+- **Monitoring:** CloudWatch logs/metrics for all infra and app components; X-Ray enabled on Lambda (as needed)
+- **Alarms:** CloudWatch Alarms for function errors, DynamoDB throttling, API Gateway 5XXs, etc.; SNS for alerting
+- **Cost:** AWS Budgets and Cost Explorer for spend visibility, tagging for cost attribution, regular reviews as described in Cost_Management_and_Optimization.md
+
+### 4.8 Compliance, Backup, and DR
+
+- **Compliance:** Controls for GDPR (as needed), org-wide encryption, audit logging, least-privilege access per Compliance_and_Security_Policies.md
+- **Backup:** DynamoDB PITR, regular S3 versioning, backup/restore plans as defined in Backup_and_DR_Strategy.md
+
+---
+
+## 5. Naming Conventions, Standards & References
+
+- **All naming, tagging, and resource organization strictly follows** [Naming_Conventions.md](Naming_Conventions.md)
+- **AWS network structure and subnetting adheres to** [AWS_Addressing_Plan.md](AWS_Addressing_Plan.md)
+- **Detailed agent roles and event protocols in** [Agent_Structure_and_Roles.md](Agent_Structure_and_Roles.md), [Agent_Communication_and_Events.md](Agent_Communication_and_Events.md)
+- **CI/CD, security, backup, and cost policies detailed in**:
+  - [GitHub_Repository_Structure.md](GitHub_Repository_Structure.md)
+  - [Compliance_and_Security_Policies.md](Compliance_and_Security_Policies.md)
+  - [Backup_and_DR_Strategy.md](Backup_and_DR_Strategy.md)
+  - [Cost_Management_and_Optimization.md](Cost_Management_and_Optimization.md)
+  - [Monitoring_and_Alerting.md](Monitoring_and_Alerting.md)
+  - [Credential_Rotation_Strategy.md](Credential_Rotation_Strategy.md)
+
+---
+
+## 6. Out-of-Scope (Phase 1)
+
+- No customer-facing SaaS platform, advanced trading, or real-money financial flows in Phase 1 (see Phase 2+).
+- No direct external (internet) Lambda triggers unless via authenticated API Gateway.
+- No use of non-approved AWS regions, cloud services, or manual console changes.
+- No storing secrets in code or unencrypted S3/DB.
+
+---
+
+## 7. Version Control and Auditability
+
+- **All code, configuration, and documentation versioned in Git** with branch protection and review.
+- **Terraform state and all infra changes are logged and auditable** via AWS CloudTrail and CI/CD logs.
+- **This document is version-controlled**; all updates tracked, and obsolete requirements explicitly marked.
+
+---
+
+## 8. Appendices
+
+- **A. System Diagrams:** See [Architecture_Overview.md](Architecture_Overview.md) and `/images/` for current and target system diagrams.
+- **B. Phase Milestone Checklists:** Phase-specific implementation checklists are tracked in subfolders (e.g., `Phase1/Phase1_Overview.md` and supporting detail files).
+- **C. Reference Docs:** All design, security, and operational policy documents are indexed in this repo for complete traceability.
+
+---
+
+*End of document*
