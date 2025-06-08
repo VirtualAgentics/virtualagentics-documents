@@ -366,3 +366,105 @@ All Lambda functions use a standardized packaging approach:
 ---
 
 *End of document*
+
+## Appendix: Full IAM Policy Documents (Phase 1 Lambdas)
+
+### Content Generation Lambda (`va-prod-lambda-contentgen-role`)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["secretsmanager:GetSecretValue"],
+      "Resource": ["arn:aws:secretsmanager:<region>:<account-id>:secret:va/prod/openai-api-key*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["dynamodb:PutItem"],
+      "Resource": ["arn:aws:dynamodb:<region>:<account-id>:table/va-prod-core-dynamodb"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": ["arn:aws:s3:::va-prod-content-bucket/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": ["arn:aws:logs:<region>:<account-id>:log-group:/aws/lambda/va-prod-contentgen-lambda:*"]
+    }
+  ]
+}
+```
+
+### Affiliate Link Lambda (`va-prod-lambda-afflink-role`)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": ["arn:aws:s3:::va-prod-content-bucket/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["dynamodb:UpdateItem"],
+      "Resource": ["arn:aws:dynamodb:<region>:<account-id>:table/va-prod-core-dynamodb"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": ["arn:aws:logs:<region>:<account-id>:log-group:/aws/lambda/va-prod-afflink-lambda:*"]
+    }
+  ]
+}
+```
+
+### Email Template Lambda (`va-prod-lambda-emailtemplate-role`)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail"],
+      "Resource": ["arn:aws:ses:<region>:<account-id>:identity/virtualagentics.ai"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": ["arn:aws:logs:<region>:<account-id>:log-group:/aws/lambda/va-prod-emailtemplate-lambda:*"]
+    }
+  ]
+}
+```
+
+### Workflow Orchestrator Lambda (`va-prod-lambda-orch-role`)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["lambda:InvokeFunction"],
+      "Resource": ["arn:aws:lambda:<region>:<account-id>:function:va-prod-*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["events:PutEvents"],
+      "Resource": ["arn:aws:events:<region>:<account-id>:event-bus/default"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": ["arn:aws:logs:<region>:<account-id>:log-group:/aws/lambda/va-prod-orch-lambda:*"]
+    }
+  ]
+}
+```
