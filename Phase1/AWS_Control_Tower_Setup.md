@@ -25,7 +25,33 @@ This document defines the step-by-step process for deploying and configuring the
 
 ---
 
+
 ## 2. Landing Zone Deployment
+
+### c) Organizational Structure Diagram
+The following diagram outlines the Virtual Agentics AWS account hierarchy and organizational units:
+
+```mermaid
+graph TD;
+    ROOT["Virtual Agentics (Root)"]
+    CORE["Core OU"] --> LOG_ARCHIVE["va-core-log-archive"]
+    CORE --> AUDIT["va-core-audit"]
+    CORE --> SECURITY["va-core-security"]
+
+    PROD["Prod OU"] --> PROD_CORE["va-prod-core-acct"]
+    PROD --> PROD_AI["va-prod-ai-acct"]
+
+    DEV["Dev OU"] --> DEV_CORE["va-dev-core-acct"]
+    SHARED["Shared OU"] --> SHARED_SERVICES["va-sharedservices-acct"]
+    SANDBOX["Sandbox OU"] --> SANDBOX_ACCT["va-sandbox-acct"]
+
+    ROOT --> CORE
+    ROOT --> PROD
+    ROOT --> DEV
+    ROOT --> SHARED
+    ROOT --> SANDBOX
+```
+
 
 ### a) Enable AWS Control Tower
 
@@ -49,7 +75,65 @@ This document defines the step-by-step process for deploying and configuring the
 
 ---
 
+
 ## 3. Guardrails & Governance
+
+### Explicit Terraform Configuration for Guardrails
+
+Guardrails are explicitly managed via Terraform to ensure compliance and consistency across accounts.
+
+**Example Preventive Guardrail (Disallow Public S3 Buckets):**
+```hcl
+resource "awscc_controltower_control" "disallow_public_s3" {
+  control_identifier = "AWS-GR_RESTRICTED_PUBLIC_BUCKETS"
+  target_identifier  = aws_organizations_organizational_unit.prod_ou.id
+}
+```
+
+**Example Detective Guardrail (Detect Root Account Usage):**
+```hcl
+resource "awscc_controltower_control" "detect_root_usage" {
+  control_identifier = "AWS-GR_DETECT_ROOT_USER_LOGIN"
+  target_identifier  = aws_organizations_organizational_unit.core_ou.id
+}
+```
+
+### Terraform Account Creation & Baseline Setup Example
+```hcl
+resource "aws_organizations_account" "prod_agents" {
+  name      = "va-prod-agents"
+  email     = "prod-agents@virtualagentics.ai"
+  parent_id = aws_organizations_organizational_unit.prod_ou.id
+}
+
+resource "aws_iam_role" "baseline_admin_role" {
+  name = "VAProdBaselineAdminRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        AWS = "arn:aws:iam::<Control Tower Management Account ID>:root"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  inline_policy {
+    name = "BaselineAdminPermissions"
+    policy = jsonencode({
+      Version = "2012-10-17",
+      Statement = [{
+        Effect = "Allow",
+        Action = ["*"],
+        Resource = ["*"]
+      }]
+    })
+  }
+}
+```
+
 
 - **Preventive Guardrails:** (Enabled by default in Control Tower)
   - Disallow root access keys
