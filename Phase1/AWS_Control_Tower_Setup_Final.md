@@ -33,17 +33,28 @@ The following diagram outlines the Virtual Agentics AWS account hierarchy and or
 
 ```mermaid
 graph TD;
-    ROOT["Virtual Agentics (Root)"]
+    ROOT["Virtual Agentics Root Account"]
     CORE["Core OU"] --> LOG_ARCHIVE["va-core-log-archive"]
     CORE --> AUDIT["va-core-audit"]
-    CORE --> SECURITY["va-core-security"]
+    CORE --> MANAGEMENT["va-core-management"]
 
-    PROD["Prod OU"] --> PROD_CORE["va-prod-core-acct"]
+    PROD["Production OU"]
+    PROD --> PROD_CORE["va-prod-core-acct"]
     PROD --> PROD_AI["va-prod-ai-acct"]
+    PROD --> PROD_APP["va-prod-applications"]
 
-    DEV["Dev OU"] --> DEV_CORE["va-dev-core-acct"]
-    SHARED["Shared OU"] --> SHARED_SERVICES["va-sharedservices-acct"]
-    SANDBOX["Sandbox OU"] --> SANDBOX_ACCT["va-sandbox-acct"]
+    DEV["Development OU"]
+    DEV --> DEV_CORE["va-dev-core-acct"]
+    DEV --> DEV_SANDBOX["va-dev-sandbox"]
+    DEV --> DEV_TESTING["va-dev-testing"]
+
+    SHARED["Shared Services OU"]
+    SHARED --> SHARED_INFRA["va-shared-infrastructure"]
+    SHARED --> SHARED_NET["va-shared-networking"]
+    SHARED --> SHARED_OPS["va-shared-operations"]
+
+    SANDBOX["Sandbox OU"]
+    SANDBOX --> SANDBOX_ACCT["va-sandbox-acct"]
 
     ROOT --> CORE
     ROOT --> PROD
@@ -51,8 +62,6 @@ graph TD;
     ROOT --> SHARED
     ROOT --> SANDBOX
 ```
-
-
 ### a) Enable AWS Control Tower
 
 1. Log in to root/management account.
@@ -215,37 +224,3 @@ resource "aws_iam_role" "baseline_admin_role" {
 ---
 
 *End of document*
-
-### AWS Organization Structure Diagram
-
-```mermaid
-graph TD;
-    ROOT["Virtual Agentics Root Account"]
-    CORE["Core OU"] --> LOG_ARCHIVE["va-core-log-archive"]
-    CORE --> AUDIT["va-core-audit"]
-    CORE --> MANAGEMENT["va-core-management"]
-
-    PROD["Production OU"]
-    PROD --> PROD_CORE["va-prod-core-acct"]
-    PROD --> PROD_AI["va-prod-ai-acct"]
-    PROD --> PROD_APP["va-prod-applications"]
-
-    DEV["Development OU"]
-    DEV --> DEV_CORE["va-dev-core-acct"]
-    DEV --> DEV_SANDBOX["va-dev-sandbox"]
-    DEV --> DEV_TESTING["va-dev-testing"]
-
-    SHARED["Shared Services OU"]
-    SHARED --> SHARED_INFRA["va-shared-infrastructure"]
-    SHARED --> SHARED_NET["va-shared-networking"]
-    SHARED --> SHARED_OPS["va-shared-operations"]
-
-    SANDBOX["Sandbox OU"]
-    SANDBOX --> SANDBOX_ACCT["va-sandbox-acct"]
-
-    ROOT --> CORE
-    ROOT --> PROD
-    ROOT --> DEV
-    ROOT --> SHARED
-    ROOT --> SANDBOX
-```
