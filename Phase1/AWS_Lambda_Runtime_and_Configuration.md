@@ -183,6 +183,66 @@ resource "aws_security_group" "lambda_sg" {
 - [Monitoring_and_Alerting.md](../Monitoring_and_Alerting.md)
 - Source: "AWS Lambda runtime and configuration.pdf"
 
+
+## Appendix: IAM Roles & Policies (Phase 1)
+
+### Lambda Execution Role Policy Example (General)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "dynamodb:PutItem",
+        "s3:PutObject",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:<region>:<account-id>:secret:va/prod/*",
+        "arn:aws:dynamodb:<region>:<account-id>:table/va-prod-core-*",
+        "arn:aws:s3:::va-prod-*/*",
+        "arn:aws:logs:<region>:<account-id>:log-group:/aws/lambda/va-prod-*:*"
+      ]
+    }
+  ]
+}
+```
+
+### Cross-Account OIDC IAM Role (GitHub Actions CI/CD)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:sub": "repo:VirtualAgentics/virtualagentics-iac:*"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Control Tower SCP Enforcement (Examples)
+
+- Disallow public S3 bucket creation.
+- Require encryption for AWS managed resources.
+- Restrict AWS resources to `eu-central-1` region.
+- Disallow root user access keys.
+
+These controls are enforced via AWS Control Tower SCPs.
+
 ---
 
 *End of document*
