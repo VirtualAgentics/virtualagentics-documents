@@ -142,25 +142,3 @@ graph LR;
 ---
 
 *End of document*
-
-### Serverless Content Pipeline Diagram
-
-```mermaid
-graph LR;
-    EVENT_API["API Gateway Trigger"]
-    EVENT_SCHED["Scheduled Event (EventBridge)"]
-    LAMBDA_GEN["va-prod-contentgen-lambda"]
-    S3_CONTENT["S3 Bucket: va-prod-content-bucket"]
-    LAMBDA_SITE["va-prod-sitegen-lambda (Hugo)"]
-    S3_SITE["S3 Bucket: va-prod-static-site"]
-    CLOUDFRONT["CloudFront Distribution"]
-    USER["End User"]
-
-    EVENT_API --> LAMBDA_GEN
-    EVENT_SCHED --> LAMBDA_GEN
-    LAMBDA_GEN --> S3_CONTENT
-    S3_CONTENT --> LAMBDA_SITE
-    LAMBDA_SITE --> S3_SITE
-    S3_SITE --> CLOUDFRONT
-    CLOUDFRONT --> USER
-```
