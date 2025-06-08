@@ -134,4 +134,31 @@ This document details the hierarchical structure of Virtual Agentics’ agentic 
 
 ---
 
+
+## 8. Phase-by-Phase Evolution of Agent Roles
+
+| Phase | Agent Roles                                         | Expanded Responsibilities & Notes                                       |
+|-------|-----------------------------------------------------|-------------------------------------------------------------------------|
+| 1     | CEO, CTO, HR, Ops, Marketing (Content Generation)   | Basic infrastructure setup, MVP agents, initial governance, and compliance |
+| 2     | CFO, CMO, Compliance, R&D                           | Persistent state management, advanced research activities, integration of SaaS capabilities, preliminary trading strategies |
+| 3     | Trading Agents, Specialized Department Agents       | Automated trading systems, departmental specialization, enhanced data analytics, increased operational autonomy |
+| 4     | Full C-suite autonomy, Cross-department project teams | Comprehensive multi-cloud strategies, sophisticated self-management, strategic operational autonomy |
+
+## 9. Expanded Departmental Agent Roles
+
+- **Finance/Trading Agent(s)**
+  - Executes automated trades according to predefined risk thresholds and compliance policies.
+  - Monitors real-time financial performance, cloud spending, and budgets daily.
+  - Produces detailed monthly financial summary reports and quarterly strategic financial assessments for CFO Agent.
+  - Implements proactive cost optimizations and automated anomaly detection systems for financial activities.
+
+- **R&D Agent(s)**
+  - Regularly performs comprehensive technology and market trend analyses.
+  - Delivers monthly research summaries and insights directly to CTO and CEO agents.
+  - Proposes innovative system enhancements and prototypes new agent functionalities quarterly.
+  - Conducts rigorous benchmarking and performance assessments of emerging AI models or technologies.
+
+---
+
 *End of document*
+

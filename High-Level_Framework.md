@@ -49,6 +49,7 @@ The system is broken down into modular building blocks, each with well-defined i
 - **Serverless Foundation:** Lambda for initial agents, with handler structure and CI/CD deployment.
 - **Event Bus:** Agents communicate through defined event contracts (SNS/SQS/EventBridge).
 - **Data Plane:** DynamoDB for fast, auditable, low-maintenance agent data and logging.
+- **Agent Orchestration Frameworks:** Adopt specialized multi-agent orchestration frameworks such as CrewAI and AutoGen to enhance agent collaboration, autonomy, and efficiency.
 
 ### d) Observability & Control
 
@@ -67,12 +68,12 @@ The system is broken down into modular building blocks, each with well-defined i
 
 ## 4. Phased Delivery Roadmap
 
-| Phase  | Foundation/Objective                                                                                                 |
-|--------|---------------------------------------------------------------------------------------------------------------------|
-| 1      | Core AWS Org (Control Tower), networking, IAM, baseline CI/CD, naming conventions, first MVP agent(s)               |
-| 2      | Persistent state, advanced AI workflow, SaaS/ML infra, core agentic platform, open-source model experimentation     |
-| 3      | Department/vertical expansion: agentic trading, finance, marketing, compliance, research, and their governance      |
-| 4      | Multi-cloud scaling, advanced AI/ML pipelines, continuous learning, high-resilience, full agent self-management     |
+| Phase  | Timeline     | Foundation/Objective                                                                                                 |
+|--------|--------------|---------------------------------------------------------------------------------------------------------------------|
+| 1      | Months 0-2   | Core AWS Org (Control Tower), networking, IAM, baseline CI/CD, naming conventions, first MVP agent(s)                |
+| 2      | Months 3-6   | Persistent state, advanced AI workflow, SaaS/ML infra, core agentic platform, open-source model experimentation      |
+| 3      | Months 7-12  | Department/vertical expansion: agentic trading, finance, marketing, compliance, research, and their governance       |
+| 4      | Month 13+    | Multi-cloud scaling, advanced AI/ML pipelines, continuous learning, high-resilience, full agent self-management      |
 
 Each phase:
 - **Is explicitly documented** (requirements, outputs, lessons learned, rollback/DR).

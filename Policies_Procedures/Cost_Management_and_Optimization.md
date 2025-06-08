@@ -97,4 +97,31 @@ This document establishes the cost management strategy, controls, and optimizati
 
 ---
 
+
+## 2. Core Cost Controls
+
+### d) Financial Milestones and Scaling Criteria
+
+Explicit financial milestones and associated infrastructure reinvestment unlocks are as detailed below, directly derived from the Vision document (Vision.pdf):
+
+#### Phase 2 Scaling Criteria:
+
+| Revenue Threshold (cumulative) | Reinvestment Unlock                                |
+|--------------------------------|----------------------------------------------------|
+| €500+                          | Rent a small GPU instance (~€150–€200/month) to accelerate heavy computational tasks |
+| €1,000+                        | Deploy a self-hosted LLM (e.g., LLaMA 7B on GPU) to minimize reliance on external API services |
+
+#### Phase 3 Scaling Criteria:
+
+| Revenue Threshold (cumulative) | Reinvestment Unlock                                |
+|--------------------------------|----------------------------------------------------|
+| €3,000+                        | Acquire a dedicated GPU server (e.g., 1–2× T4 GPUs) for continuous inference |
+| €5,000+                        | Initiate fine-tuning or migrate to a larger LLM (13B+ parameters) on a multi-GPU setup |
+| €8,000+                        | Invest explicitly in advanced tooling (full multi-agent orchestration frameworks, reinforcement learning training infrastructure) |
+
+Infrastructure scaling decisions are explicitly contingent upon achieving these cumulative revenue thresholds, ensuring strategic alignment of spending with revenue growth.
+
+
+---
+
 *End of document*

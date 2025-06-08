@@ -21,7 +21,7 @@ This document defines the technical objectives, system requirements, and phased 
 - **Emulate real-world corporate structure** with a CEO agent, C-level domain agents (e.g. CTO, CFO, CMO, CAgO), and department-specialized agents, all coordinated via event-driven protocols.
 - **Adopt a phased, modular roadmap** allowing stepwise, auditable growth—prioritizing core foundation and iterative capability addition.
 - **Enforce security, compliance, and auditability** as first principles, using strict naming conventions, role separation, and continuous monitoring.
-- **Demonstrate financial sustainability,** capping initial cloud spend (target: €1,000/month), with dynamic scale-up contingent on profitability and real value creation.
+- **Demonstrate financial sustainability:** Cloud spend initially capped at €1,000/month, with detailed scaling criteria and profit-based onboarding scenarios outlined explicitly in [Cost Management and Optimization documentation](Cost_Management_and_Optimization.md).
 - **Make the system open, extensible, and self-improving,** providing a reference model for others to replicate or extend.
 
 ## 3. Architectural Overview
@@ -38,6 +38,12 @@ This document defines the technical objectives, system requirements, and phased 
   - **Secrets & Credential Management:** AWS Secrets Manager is used for API keys and sensitive config, with rotation strategies defined.
   - **Observability & Compliance:** CloudWatch for logs/metrics, CloudTrail for audit, Config for compliance checks, Cost Explorer/Budgets for spend management.
   - **CI/CD Pipelines:** All changes (infra/app) deployed via GitHub Actions with OIDC-based role assumption; no static keys.
+
+
+### 3.4 Multi-Cloud Strategy
+
+A multi-cloud architecture involving providers such as Hetzner, Azure, and GCP will be evaluated explicitly at the conclusion of Phase 2. This evaluation will rely on metrics collected regarding system performance, reliability, and cost-effectiveness to determine the necessity and benefits of moving workloads beyond AWS.
+
 
 ### 3.2 Hierarchical Multi-Agent Model
 

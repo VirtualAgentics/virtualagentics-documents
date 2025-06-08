@@ -113,7 +113,28 @@ This document prescribes the standard naming conventions for all resources, serv
 
 ---
 
-## 8. Versioning and Exceptions
+
+## 9. Email Alias Conventions (AWS WorkMail)
+
+All email aliases used within AWS WorkMail must adhere strictly to these naming conventions to ensure clarity, consistency, and ease of management.
+
+- **General Alias Pattern:** `va-<account_name>@virtualagentics.ai`
+  - Example: `va-prod-core@virtualagentics.ai`
+  - Example: `va-dev-infra@virtualagentics.ai`
+
+- **Primary Mailbox:**
+  - Central mailbox for alias routing: `bdc@virtualagentics.ai`
+  - All aliases route incoming emails directly to this mailbox.
+
+- **Specific Functional Aliases:**
+  - For production inquiries: `va-prod-support@virtualagentics.ai`
+  - For development notifications: `va-dev-alerts@virtualagentics.ai`
+
+- **Tagging and Documentation:**
+  - Every email alias created must be documented explicitly in the internal configuration management database and tagged appropriately within AWS resources for auditability.
+
+
+## 10. Versioning and Exceptions
 
 - **All changes to naming conventions are version-controlled** in this document. Exceptions must be documented here, with rationale, date, and approver.
 - **Deprecated names** from early phases (if any) are to be clearly noted and migrated as possible.
