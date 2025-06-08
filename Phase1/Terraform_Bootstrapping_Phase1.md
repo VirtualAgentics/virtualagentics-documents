@@ -87,6 +87,40 @@ terraform {
 
 ## 4. Project Repository and Structure
 
+### Comprehensive Network Topology Diagram
+
+```mermaid
+graph TB;
+    subgraph "va-prod-core-vpc (10.0.0.0/16)"
+        PUB_A["Public Subnet AZ-A (10.0.1.0/24)"]
+        PUB_B["Public Subnet AZ-B (10.0.2.0/24)"]
+        PRIV_A["Private Subnet AZ-A (10.0.10.0/24)"]
+        PRIV_B["Private Subnet AZ-B (10.0.11.0/24)"]
+        ISO_A["Isolated Subnet AZ-A (10.0.20.0/24)"]
+        ISO_B["Isolated Subnet AZ-B (10.0.21.0/24)"]
+    end
+    subgraph "va-dev-core-vpc (10.2.0.0/16)"
+        DEV_PUB_A["Public Subnet AZ-A (10.2.1.0/24)"]
+        DEV_PRIV_A["Private Subnet AZ-A (10.2.10.0/24)"]
+    end
+    subgraph "va-shared-infra-vpc (10.4.0.0/16)"
+        SHARED_PUB_A["Public Subnet AZ-A (10.4.1.0/24)"]
+        SHARED_PRIV_A["Private Subnet AZ-A (10.4.10.0/24)"]
+    end
+    INTERNET["Internet Gateway"]
+    INTERNET --> PUB_A
+    INTERNET --> PUB_B
+    INTERNET --> DEV_PUB_A
+    INTERNET --> SHARED_PUB_A
+    PUB_A --> NAT_GW_A["NAT Gateway AZ-A"]
+    PUB_B --> NAT_GW_B["NAT Gateway AZ-B"]
+    DEV_PUB_A --> DEV_NAT["Dev NAT Gateway"]
+    SHARED_PUB_A --> SHARED_NAT["Shared NAT Gateway"]
+    PRIV_A --> NAT_GW_A
+    PRIV_B --> NAT_GW_B
+    DEV_PRIV_A --> DEV_NAT
+    SHARED_PRIV_A --> SHARED_NAT
+```
 
 ### Terraform Modules Overview
 
