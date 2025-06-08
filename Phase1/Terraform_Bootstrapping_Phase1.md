@@ -87,7 +87,19 @@ terraform {
 
 ## 4. Project Repository and Structure
 
+
 ### Terraform Modules Overview
+
+Explicitly managed Terraform modules in the `virtualagentics-iac` repository:
+
+- **VA-VPC Module** (`modules/va-vpc`): Defines foundational VPC and subnet layout.
+- **VA-IAM Module** (`modules/va-iam`): Centralized IAM roles and policies.
+- **VA-Lambda Module** (`modules/va-lambda`): Standardized Lambda function deployment.
+- **VA-Route53 Module** (`modules/va-route53`): DNS configurations for primary and subdomains.
+- **VA-WorkMail Module** (`modules/va-workmail`): Email configuration and alias management.
+- **VA-Security Module** (`modules/va-security`): Baseline security groups and rules.
+- **VA-S3 Module** (`modules/va-s3`): Standard bucket setups for Terraform state and application data.
+
 
 Explicitly managed Terraform modules in the `virtualagentics-iac` repository:
 
