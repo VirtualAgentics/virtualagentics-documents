@@ -43,11 +43,81 @@ This document captures all implementation details for AWS Lambda functions creat
 
 ### a) Content Generation Lambda (`va-prod-contentgen-lambda`)
 
+#### Simplified Lambda Handler Pseudocode
+
+```python
+def handler(event, context):
+    # Fetch API key securely from Secrets Manager
+    api_key = get_secret("OPENAI_API_KEY")
+
+    # Validate incoming event
+    validate_event(event)
+
+    # Invoke external API (OpenAI)
+    response = invoke_openai_api(api_key, event['content_request'])
+
+    # Store results
+    write_to_dynamodb(response['metadata'])
+    write_to_s3(response['content_file'])
+
+    # Log success or errors
+    log_event_outcome(response)
+```
+
+
 - **Purpose:** Generate blog articles or knowledge content using GPT models (OpenAI via API).
 - **Trigger:** 
   - API Gateway (REST endpoint for content requests)
   - Scheduled runs (CloudWatch Events/EventBridge for periodic batch)
 - **IAM Permissions:**
+
+#### Example IAM Policy JSON (Least Privilege)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:eu-central-1:123456789012:secret:va/prod/openai-api-key*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/va-prod-core-dynamodb"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::va-prod-content-bucket/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:eu-central-1:123456789012:log-group:/aws/lambda/va-prod-contentgen-lambda:*"
+      ]
+    }
+  ]
+}
+```
+
   - Read `OPENAI_API_KEY` from Secrets Manager
   - Write generated content to DynamoDB table (`va-prod-core-dynamodb`)
   - Write content artifacts to S3 bucket (`va-prod-content-bucket`)
@@ -63,6 +133,54 @@ This document captures all implementation details for AWS Lambda functions creat
   - S3 Put event (new content file uploaded)
   - EventBridge event (content publish request)
 - **IAM Permissions:**
+
+#### Example IAM Policy JSON (Least Privilege)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:eu-central-1:123456789012:secret:va/prod/openai-api-key*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/va-prod-core-dynamodb"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::va-prod-content-bucket/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:eu-central-1:123456789012:log-group:/aws/lambda/va-prod-contentgen-lambda:*"
+      ]
+    }
+  ]
+}
+```
+
   - Read/write to S3 bucket (`va-prod-content-bucket`)
   - Update DynamoDB record for enriched content
   - Write logs to CloudWatch
@@ -77,6 +195,54 @@ This document captures all implementation details for AWS Lambda functions creat
   - EventBridge event (notification request)
   - Direct API call (for future extensibility)
 - **IAM Permissions:**
+
+#### Example IAM Policy JSON (Least Privilege)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:eu-central-1:123456789012:secret:va/prod/openai-api-key*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/va-prod-core-dynamodb"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::va-prod-content-bucket/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:eu-central-1:123456789012:log-group:/aws/lambda/va-prod-contentgen-lambda:*"
+      ]
+    }
+  ]
+}
+```
+
   - Write to SES/WorkMail (for sending)
   - Log email generation to CloudWatch
 - **Code structure:**
@@ -89,6 +255,54 @@ This document captures all implementation details for AWS Lambda functions creat
   - EventBridge scheduled trigger (e.g., every X minutes)
   - Manual execution via AWS Console for ad hoc testing
 - **IAM Permissions:**
+
+#### Example IAM Policy JSON (Least Privilege)
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": [
+        "arn:aws:secretsmanager:eu-central-1:123456789012:secret:va/prod/openai-api-key*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:eu-central-1:123456789012:table/va-prod-core-dynamodb"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::va-prod-content-bucket/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": [
+        "arn:aws:logs:eu-central-1:123456789012:log-group:/aws/lambda/va-prod-contentgen-lambda:*"
+      ]
+    }
+  ]
+}
+```
+
   - Invoke other Lambda functions (as needed by workflow)
   - Publish events to EventBridge/SNS topics
   - Log workflow runs to CloudWatch
@@ -98,6 +312,22 @@ This document captures all implementation details for AWS Lambda functions creat
 ---
 
 ## 4. CI/CD and Deployment
+
+### Lambda Function Packaging
+
+All Lambda functions use a standardized packaging approach:
+
+- Dependencies listed explicitly in `requirements.txt`
+- GitHub Actions CI/CD pipeline installs dependencies:
+  ```bash
+  pip install -r requirements.txt -t ./package
+  ```
+- Code zipped along with dependencies:
+  ```bash
+  zip -r lambda_function_payload.zip .
+  ```
+- Artifacts uploaded directly via Terraform or AWS CLI during deployment
+
 
 - **Source:** `virtualagentics-lambdas` GitHub repository
 - **Build/Test:** GitHub Actions workflow per Lambda subdirectory (test, zip)
