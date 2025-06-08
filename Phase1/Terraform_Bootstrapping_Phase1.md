@@ -101,16 +101,6 @@ Explicitly managed Terraform modules in the `virtualagentics-iac` repository:
 - **VA-S3 Module** (`modules/va-s3`): Standard bucket setups for Terraform state and application data.
 
 
-Explicitly managed Terraform modules in the `virtualagentics-iac` repository:
-
-- **VPC Module:** Defines foundational VPC and subnet layout (`modules/vpc`).
-- **IAM Module:** Centralized IAM roles and policies (`modules/iam`).
-- **Lambda Module:** Standardized Lambda function deployment (`modules/lambda-functions`).
-- **Route53 Module:** DNS configurations for primary and subdomains (`modules/route53`).
-- **WorkMail Module:** Email configuration and alias management (`modules/workmail`).
-- **Security Module:** Baseline security groups and rules (`modules/security-groups`).
-- **S3 Module:** Standard bucket setups for Terraform state and application data (`modules/s3`).
-
 
 - Repo: `virtualagentics-iac` on GitHub
 - Branching: `main` (protected), `dev` (optional), PR reviews required
