@@ -27,6 +27,35 @@ This document describes the setup and configuration of DNS (Route53) and managed
 
 ## 2. Route53 Public Hosted Zone Setup
 
+### Terraform Example: DNS Records in Route53
+
+```hcl
+resource "aws_route53_record" "mx_record" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "virtualagentics.ai"
+  type    = "MX"
+  ttl     = "300"
+  records = ["10 inbound-smtp.eu-central-1.amazonaws.com"]
+}
+
+resource "aws_route53_record" "txt_verification" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "_amazonses.virtualagentics.ai"
+  type    = "TXT"
+  ttl     = "300"
+  records = [""verification-string-from-ses""]
+}
+
+resource "aws_route53_record" "cname_www" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "www.virtualagentics.ai"
+  type    = "CNAME"
+  ttl     = "300"
+  records = ["distribution123.cloudfront.net"]
+}
+```
+
+
 1. **Create public hosted zone** for `virtualagentics.ai` in Route53 (prod account)
 2. **Copy NS and SOA records** to your registrar’s portal to delegate domain to Route53
 3. **Add base records** (A/AAAA, MX, TXT, CNAME) for:
@@ -38,6 +67,23 @@ This document describes the setup and configuration of DNS (Route53) and managed
 ---
 
 ## 3. WorkMail Organization and Mailbox Setup
+
+### Terraform Example: WorkMail Email Alias Automation
+
+```hcl
+resource "aws_workmail_alias" "prod_alias" {
+  organization_id = aws_workmail_organization.main.id
+  entity_id       = aws_workmail_user.info.id
+  alias           = "prod@virtualagentics.ai"
+}
+
+resource "aws_workmail_alias" "audit_alias" {
+  organization_id = aws_workmail_organization.main.id
+  entity_id       = aws_workmail_user.info.id
+  alias           = "audit@virtualagentics.ai"
+}
+```
+
 
 1. **Create AWS WorkMail organization** in the prod/shared account (eu-central-1)
 2. **Add domain** `virtualagentics.ai` to WorkMail
@@ -51,6 +97,26 @@ This document describes the setup and configuration of DNS (Route53) and managed
 ---
 
 ## 4. SES (Simple Email Service) Integration
+
+### Email Flow Diagram (WorkMail ↔️ Route53 ↔️ SES)
+
+```mermaid
+graph TD;
+  User["External User/Service"]
+  SES["SES (Outbound SMTP)"]
+  Route53["Route53 DNS (virtualagentics.ai)"]
+  WorkMail["WorkMail (virtualagentics.ai)"]
+  
+  User -->|Inbound Email (MX record)| Route53
+  Route53 -->|Route to Mailbox| WorkMail
+  WorkMail -->|Fetch Email| InternalUser["Internal User"]
+  
+  InternalUser -->|Send Email| WorkMail
+  WorkMail -->|Outbound SMTP| SES
+  SES -->|DNS Records (TXT, DKIM)| Route53
+  SES --> User
+```
+
 
 - **SES for transactional mail:** (notifications, agent comms, alerts)
 - **Domain verification**: Add SES-supplied TXT records to Route53
