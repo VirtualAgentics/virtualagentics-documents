@@ -123,6 +123,27 @@ All code, configuration, and documentation are versioned in GitHub under the `Vi
 ---
 
 ## 6. Automation and Integrations
+### CI/CD Pipeline Workflow Diagram
+
+```mermaid
+graph LR;
+    DEV["Developer"]
+    GH_REPO["GitHub Repo (virtualagentics-iac, Lambdas)"]
+    GH_ACTIONS["GitHub Actions Workflow (OIDC)"]
+    AWS["AWS (Terraform & Lambda Deployment)"]
+
+    DEV --> GH_REPO
+    GH_REPO --> GH_ACTIONS
+    GH_ACTIONS --> AWS
+
+    subgraph AWS
+        TF_DEPLOY["Terraform Apply (Infrastructure)"]
+        LAMBDA_DEPLOY["Lambda Function Update"]
+        TF_DEPLOY --> AWS_RES["AWS Resources (VPC, IAM, etc.)"]
+        LAMBDA_DEPLOY --> AWS_LAMBDA["Lambda Functions"]
+    end
+```
+
 
 - **GitHub Actions workflows** for CI/CD (see [Terraform_Bootstrapping_Phase1.md](Terraform_Bootstrapping_Phase1.md))
 - **Branch protections:** No force-pushes; required status checks; PR review enforced
