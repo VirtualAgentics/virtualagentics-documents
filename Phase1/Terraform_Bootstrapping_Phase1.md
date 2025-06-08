@@ -28,6 +28,12 @@ This document describes the step-by-step process for bootstrapping the initial A
 
 ## 2. High-Level Bootstrapping Steps
 
+### Clarification: Control Tower Account Provisioning
+
+- **Account and OU creation:** Managed manually through AWS Control Tower initial setup for core accounts (Management, Audit, Log Archive). Terraform currently **does not** automate these initial accounts due to Control Tower limitations.
+- **Guardrails:** Can be explicitly managed via Terraform using AWS Control Tower Terraform provider (`awscc_controltower_control`), but initial baseline guardrails are currently set manually during the Control Tower setup.
+
+
 1. **Prepare AWS Organization/Accounts** via Control Tower (Management, Audit, Log Archive, Prod, Dev, Shared, Sandbox)
 2. **Create remote Terraform backend** (S3 bucket, DynamoDB lock table)
 3. **Configure and initialize Terraform project/repository**
@@ -81,6 +87,19 @@ terraform {
 
 ## 4. Project Repository and Structure
 
+### Terraform Modules Overview
+
+Explicitly managed Terraform modules in the `virtualagentics-iac` repository:
+
+- **VPC Module:** Defines foundational VPC and subnet layout (`modules/vpc`).
+- **IAM Module:** Centralized IAM roles and policies (`modules/iam`).
+- **Lambda Module:** Standardized Lambda function deployment (`modules/lambda-functions`).
+- **Route53 Module:** DNS configurations for primary and subdomains (`modules/route53`).
+- **WorkMail Module:** Email configuration and alias management (`modules/workmail`).
+- **Security Module:** Baseline security groups and rules (`modules/security-groups`).
+- **S3 Module:** Standard bucket setups for Terraform state and application data (`modules/s3`).
+
+
 - Repo: `virtualagentics-iac` on GitHub
 - Branching: `main` (protected), `dev` (optional), PR reviews required
 - Directory layout:
@@ -93,6 +112,49 @@ terraform {
 ---
 
 ## 5. Initial IAM Roles and OIDC Integration
+
+### Example Terraform Resource Definition: IAM Role for Terraform CI/CD
+
+```hcl
+resource "aws_iam_role" "terraform_ci_cd_role" {
+  name = "va-prod-core-terraform-iam-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Federated = "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+      },
+      Action = "sts:AssumeRoleWithWebIdentity",
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:sub": "repo:VirtualAgentics/virtualagentics-iac:*"
+        }
+      }
+    }]
+  })
+
+  inline_policy {
+    name = "TerraformCIPermissions"
+    policy = jsonencode({
+      Version = "2012-10-17",
+      Statement = [{
+        Effect = "Allow",
+        Action = "*",
+        Resource = "*"
+      }]
+    })
+  }
+
+  tags = {
+    Name        = "va-prod-core-terraform-iam-role"
+    Environment = "prod"
+    Project     = "VirtualAgentics"
+  }
+}
+```
+
 
 - **Terraform CI/CD Role:** `va-prod-core-terraform-iam-role`
   - Trusted via GitHub OIDC provider (`token.actions.githubusercontent.com`)
