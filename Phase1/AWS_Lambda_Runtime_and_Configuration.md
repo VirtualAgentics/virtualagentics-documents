@@ -36,6 +36,45 @@ This document provides a definitive reference for AWS Lambda runtime environment
 
 ## 3. Environment Variables and Secrets
 
+### Example Terraform Configuration
+
+```hcl
+resource "aws_lambda_function" "example_lambda" {
+  function_name = "va-prod-example-lambda"
+  role          = aws_iam_role.lambda_exec_role.arn
+  handler       = "handler.lambda_handler"
+  runtime       = "python3.11"
+  memory_size   = 256
+  timeout       = 30
+
+  environment {
+    variables = {
+      OPENAI_API_KEY = aws_secretsmanager_secret_version.openai_api_key.secret_string
+      DYNAMODB_TABLE = "va-prod-core-dynamodb"
+      S3_BUCKET      = "va-prod-content-bucket"
+    }
+  }
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
+    security_group_ids = [aws_security_group.lambda_sg.id]
+  }
+
+  filename         = "lambda_function_payload.zip"
+  source_code_hash = filebase64sha256("lambda_function_payload.zip")
+}
+
+resource "aws_secretsmanager_secret" "openai_api_key" {
+  name = "va/prod/openai-api-key"
+}
+
+resource "aws_secretsmanager_secret_version" "openai_api_key" {
+  secret_id     = aws_secretsmanager_secret.openai_api_key.id
+  secret_string = "example-openai-api-key"
+}
+```
+
+
 - All secrets/credentials **injected as environment variables** at deploy-time by Terraform or CI/CD pipeline
 - **No hardcoded secrets in code**
 - Sensitive values (API keys, DB credentials) pulled securely from AWS Secrets Manager at runtime
@@ -52,6 +91,38 @@ This document provides a definitive reference for AWS Lambda runtime environment
 ---
 
 ## 4. VPC, Networking, and Subnet Selection
+
+### Security Group Configuration (Least Privilege Example)
+
+```hcl
+resource "aws_security_group" "lambda_sg" {
+  name        = "va-prod-lambda-sg"
+  description = "Security group for Lambda functions with least privilege outbound"
+
+  vpc_id = aws_vpc.main_vpc.id
+
+  ingress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = []  # No inbound traffic allowed
+  }
+
+  egress {
+    protocol    = "tcp"
+    from_port   = 443
+    to_port     = 443
+    cidr_blocks = ["0.0.0.0/0"]  # Allow outbound HTTPS only
+  }
+
+  tags = {
+    Name        = "va-prod-lambda-sg"
+    Environment = "prod"
+    Project     = "VirtualAgentics"
+  }
+}
+```
+
 
 - **Default:** Lambda deployed to private subnets as per [AWS_Addressing_Plan.md](../AWS_Addressing_Plan.md) when network access to RDS, VPC endpoints, or internal APIs is needed
 - **Internet access:** Via NAT Gateway in public subnet if Lambda needs outbound calls (e.g., to OpenAI API)
