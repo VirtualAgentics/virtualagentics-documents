@@ -183,9 +183,6 @@ resource "aws_security_group" "lambda_sg" {
 - [Monitoring_and_Alerting.md](../Monitoring_and_Alerting.md)
 - Source: "AWS Lambda runtime and configuration.pdf"
 
----
-
-*End of document*
 
 ## Appendix: IAM Roles & Policies (Phase 1)
 
@@ -245,3 +242,7 @@ resource "aws_security_group" "lambda_sg" {
 - Disallow root user access keys.
 
 These controls are enforced via AWS Control Tower SCPs.
+
+---
+
+*End of document*
