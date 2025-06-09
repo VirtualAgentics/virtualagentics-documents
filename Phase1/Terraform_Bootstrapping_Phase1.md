@@ -290,3 +290,32 @@ tags = {
 ---
 
 *End of document*
+
+## Appendix: Networking Security Details (Phase 1)
+
+### Security Groups
+
+| Security Group Name | Purpose                        | Inbound Rules                     | Outbound Rules                     |
+|---------------------|--------------------------------|-----------------------------------|------------------------------------|
+| va-prod-lambda-sg   | Lambda Functions               | None                              | HTTPS (443) to 0.0.0.0/0 only      |
+| va-prod-bastion-sg  | Bastion Host                   | SSH (22) from authorized ranges   | HTTPS (443), SSH (22)              |
+| va-prod-alb-sg      | Application Load Balancer      | HTTP (80), HTTPS (443)            | All outbound                       |
+
+### Network ACL (NACL) Configurations
+
+- **Public Subnets:**
+  - Default NACL allowing all inbound/outbound traffic.
+
+- **Private Subnets:**
+  - Allow inbound from Public Subnets/NAT Gateways.
+  - Allow outbound HTTPS (443) to any IP.
+
+- **Isolated Subnets:**
+  - Deny all inbound except explicitly allowed internal traffic.
+  - Deny outbound to all except essential internal services (DNS, management).
+
+### VPC Endpoints (Recommended)
+
+- **Secrets Manager Endpoint:** For secure secret retrieval without internet access.
+- **DynamoDB Endpoint:** Ensures secure, internal access to DynamoDB.
+- **S3 Endpoint:** Secure internal S3 interactions without public internet routing.
