@@ -126,3 +126,22 @@ This document defines the monitoring and alerting standards for Virtual Agentics
 ---
 
 *End of document*
+
+## Alert Notifications
+
+All critical CloudWatch alarms explicitly route alerts via SNS to:
+
+- Email: `alerts@virtualagentics.ai`
+- Slack Channel: `#alerts-virtualagentics` (if configured)
+
+```hcl
+resource "aws_sns_topic" "alerts_topic" {
+  name = "va-prod-ops-alerts"
+}
+
+resource "aws_sns_topic_subscription" "email_subscription" {
+  topic_arn = aws_sns_topic.alerts_topic.arn
+  protocol  = "email"
+  endpoint  = "alerts@virtualagentics.ai"
+}
+```

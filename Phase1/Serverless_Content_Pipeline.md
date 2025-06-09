@@ -56,6 +56,30 @@ graph LR;
 ---
 
 ## 2. Workflow Steps
+## Terraform Configuration for S3 Event Trigger
+
+```hcl
+resource "aws_s3_bucket_notification" "content_trigger" {
+  bucket = aws_s3_bucket.content_bucket.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.site_generator_lambda.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "content/"
+  }
+
+  depends_on = [aws_lambda_permission.allow_bucket]
+}
+
+resource "aws_lambda_permission" "allow_bucket" {
+  statement_id  = "AllowS3Invoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.site_generator_lambda.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.content_bucket.arn
+}
+```
+
 
 1. **Content Generation**
     - Agentic Lambda (`va-prod-contentgen-lambda`) generates article, writes markdown file to S3 `content/` prefix in `va-prod-content-bucket`
