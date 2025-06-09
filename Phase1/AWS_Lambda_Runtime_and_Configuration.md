@@ -124,7 +124,7 @@ resource "aws_security_group" "lambda_sg" {
 ```
 
 
-- **Default:** Lambda deployed to private subnets as per [AWS_Addressing_Plan.md](../AWS_Addressing_Plan.md) when network access to RDS, VPC endpoints, or internal APIs is needed
+- **Default:** Lambda deployed to private subnets as per [[AWS Addressing Plan](../AWS_Addressing_Plan.md#3-subnet-structure-per-vpc)](../[AWS Addressing Plan](../AWS_Addressing_Plan.md#3-subnet-structure-per-vpc)) when network access to RDS, VPC endpoints, or internal APIs is needed
 - **Internet access:** Via NAT Gateway in public subnet if Lambda needs outbound calls (e.g., to OpenAI API)
 - **Security groups:** Strictly least-privilege, allowing only required egress/ingress
 - **DNS:** Internal VPC DNS enabled for private resources
@@ -133,7 +133,7 @@ resource "aws_security_group" "lambda_sg" {
 
 ## 5. IAM Roles and Permissions
 
-- **Each Lambda** assigned a dedicated IAM role following [Naming_Conventions.md](../Naming_Conventions.md)
+- **Each Lambda** assigned a dedicated IAM role following [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md))
 - **Permissions:** Only required actions (e.g., `dynamodb:PutItem`, `s3:GetObject`, `secretsmanager:GetSecretValue`, `logs:CreateLogStream`)
 - **Logging:** All Lambdas write logs to `/aws/lambda/<function-name>` in CloudWatch
 - **Environment segregation:** Separate IAM roles for prod, dev, test
@@ -152,7 +152,7 @@ resource "aws_security_group" "lambda_sg" {
 ## 7. Monitoring, Error Handling, and DLQs
 
 - **CloudWatch Logs:** Enabled by default
-- **CloudWatch Alarms:** Set for error count, throttle, and duration (see [Monitoring_and_Alerting.md](../Monitoring_and_Alerting.md))
+- **CloudWatch Alarms:** Set for error count, throttle, and duration (see [[Monitoring and Alerting](../Monitoring_and_Alerting.md)](../[Monitoring and Alerting](../Monitoring_and_Alerting.md)))
 - **DLQ:** Dead-letter queue configured for failed invocations as needed (SQS or SNS)
 - **Retries:** Default AWS retry policy used unless otherwise specified
 
@@ -178,9 +178,9 @@ resource "aws_security_group" "lambda_sg" {
 ## 10. References
 
 - [Lambda_Function_Implementation_Details.md](Lambda_Function_Implementation_Details.md)
-- [Naming_Conventions.md](../Naming_Conventions.md)
+- [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md))
 - [Terraform_Bootstrapping_Phase1.md](Terraform_Bootstrapping_Phase1.md)
-- [Monitoring_and_Alerting.md](../Monitoring_and_Alerting.md)
+- [[Monitoring and Alerting](../Monitoring_and_Alerting.md)](../[Monitoring and Alerting](../Monitoring_and_Alerting.md))
 - Source: "AWS Lambda runtime and configuration.pdf"
 
 

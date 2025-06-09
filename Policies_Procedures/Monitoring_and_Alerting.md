@@ -119,8 +119,8 @@ This document defines the monitoring and alerting standards for Virtual Agentics
 ## 9. References
 
 - [Technical_Specification_v1.md](../Technical_Specification_v1.md)
-- [Backup_and_DR_Strategy.md](../Backup_and_DR_Strategy.md)
-- [Compliance_and_Security_Policies.md](../Compliance_and_Security_Policies.md)
+- [[Backup and DR Strategy](../Backup_and_DR_Strategy.md)](../[Backup and DR Strategy](../Backup_and_DR_Strategy.md))
+- [[Compliance and Security Policies](../Compliance_and_Security_Policies.md)](../[Compliance and Security Policies](../Compliance_and_Security_Policies.md))
 - Source: "Monitoring & Alerting_ CloudWatch Alarms for AWS Services.pdf"
 
 ---

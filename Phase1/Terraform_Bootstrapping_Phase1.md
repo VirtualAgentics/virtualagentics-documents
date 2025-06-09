@@ -18,10 +18,10 @@ This document describes the step-by-step process for bootstrapping the initial A
 
 ## 1. Prerequisites
 
-- **AWS root account** with billing access, organization created with Control Tower (see [AWS_Control_Tower_Setup.md](AWS_Control_Tower_Setup.md))
+- **AWS root account** with billing access, organization created with Control Tower (see [[AWS Control Tower Setup](AWS_Control_Tower_Setup.md)]([AWS Control Tower Setup](AWS_Control_Tower_Setup.md)))
 - **Terraform 1.5+** and AWS CLI installed locally or in CI/CD runners
 - **GitHub account** (`VirtualAgentics`) and infra repo (`virtualagentics-iac`)
-- **Naming and address plan**: All names, tags, and CIDRs per [Naming_Conventions.md](../Naming_Conventions.md) and [AWS_Addressing_Plan.md](../AWS_Addressing_Plan.md)
+- **Naming and address plan**: All names, tags, and CIDRs per [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md)) and [[AWS Addressing Plan](../AWS_Addressing_Plan.md)](../[AWS Addressing Plan](../AWS_Addressing_Plan.md))
 - **Project structure**: All code and state tracked in Git, no manual console changes except break-glass
 
 ---
@@ -143,7 +143,7 @@ Explicitly managed Terraform modules in the `virtualagentics-iac` repository:
   - `/environments/prod/` (prod root, backend config, main.tf)
   - `/environments/dev/` (for later expansion)
 
-- README and comments must reference [Naming_Conventions.md](../Naming_Conventions.md), [AWS_Addressing_Plan.md](../AWS_Addressing_Plan.md)
+- README and comments must reference [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md)), [[AWS Addressing Plan](../AWS_Addressing_Plan.md)](../[AWS Addressing Plan](../AWS_Addressing_Plan.md))
 
 ---
 
@@ -281,10 +281,10 @@ tags = {
 
 ## 10. References and Linked Documents
 
-- [AWS_Control_Tower_Setup.md](AWS_Control_Tower_Setup.md)
-- [Naming_Conventions.md](../Naming_Conventions.md)
-- [AWS_Addressing_Plan.md](../AWS_Addressing_Plan.md)
-- [GitHub_Repository_Structure.md](../GitHub_Repository_Structure.md)
+- [[AWS Control Tower Setup](AWS_Control_Tower_Setup.md)]([AWS Control Tower Setup](AWS_Control_Tower_Setup.md))
+- [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md))
+- [[AWS Addressing Plan](../AWS_Addressing_Plan.md)](../[AWS Addressing Plan](../AWS_Addressing_Plan.md))
+- [[GitHub Repository Structure](../GitHub_Repository_Structure.md)](../[GitHub Repository Structure](../GitHub_Repository_Structure.md))
 - Source: "Virtual Agentics Phase 1 Terraform Bootstrapping.pdf"
 
 ---

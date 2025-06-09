@@ -117,7 +117,7 @@ resource "aws_lambda_permission" "allow_bucket" {
 | va-prod-content-bucket      | Content input        | `content/YYYY/MM/file.md`  |
 | va-prod-website-bucket      | Site output          | `public/index.html`, `public/assets/` |
 
-- All S3 access tightly controlled via IAM per [Naming_Conventions.md](../Naming_Conventions.md)
+- All S3 access tightly controlled via IAM per [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md))
 
 ---
 
@@ -158,9 +158,9 @@ resource "aws_lambda_permission" "allow_bucket" {
 
 ## 9. References
 
-- [Lambda_Function_Implementation_Details.md](Lambda_Function_Implementation_Details.md)
+- [[Lambda Function Implementation Details](Lambda_Function_Implementation_Details.md)]([Lambda Function Implementation Details](Lambda_Function_Implementation_Details.md))
 - [Terraform_Bootstrapping_Phase1.md](Terraform_Bootstrapping_Phase1.md)
-- [Naming_Conventions.md](../Naming_Conventions.md)
+- [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md))
 - Source: "Serverless Content Pipeline with Static Site Generator.pdf"
 
 ---

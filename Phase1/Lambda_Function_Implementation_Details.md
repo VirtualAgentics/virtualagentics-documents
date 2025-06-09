@@ -31,7 +31,7 @@ This document captures all implementation details for AWS Lambda functions creat
 
 - **Runtime:** Python 3.11 (all Phase 1 functions)
 - **Deployment:** Code packaged via CI/CD (GitHub Actions), zipped and deployed by Terraform or directly via AWS CLI
-- **VPC Attachment:** As required (typically private subnets per [AWS_Addressing_Plan.md](../AWS_Addressing_Plan.md))
+- **VPC Attachment:** As required (typically private subnets per [[AWS Addressing Plan](../AWS_Addressing_Plan.md#3-subnet-structure-per-vpc)](../[AWS Addressing Plan](../AWS_Addressing_Plan.md#3-subnet-structure-per-vpc)))
 - **Environment Variables:** Set via Terraform (e.g., `OPENAI_API_KEY`, S3 bucket names, table names)
 - **Timeout:** Default 30 seconds; configured per use-case
 - **Memory:** Default 256MB; increased for model calls if required
@@ -340,7 +340,7 @@ All Lambda functions use a standardized packaging approach:
 ## 5. Monitoring, Logging, and Alerts
 
 - **CloudWatch Logs:** Enabled for all functions
-- **Alarms:** Set on error count, duration, and throttling for each Lambda (see [Monitoring_and_Alerting.md](../Monitoring_and_Alerting.md))
+- **Alarms:** Set on error count, duration, and throttling for each Lambda (see [[Monitoring and Alerting](../Monitoring_and_Alerting.md)](../[Monitoring and Alerting](../Monitoring_and_Alerting.md)))
 - **Dashboards:** Lambda metrics included in CloudWatch Dashboards for operations
 - **DLQ:** Dead-letter queue configured where appropriate for failed executions
 
@@ -357,10 +357,10 @@ All Lambda functions use a standardized packaging approach:
 
 ## 7. References
 
-- [AWS_Lambda_Runtime_and_Configuration.md](AWS_Lambda_Runtime_and_Configuration.md)
-- [Naming_Conventions.md](../Naming_Conventions.md)
+- [[AWS Lambda Runtime and Configuration](AWS_Lambda_Runtime_and_Configuration.md#api-gateway-integration)]([AWS Lambda Runtime and Configuration](AWS_Lambda_Runtime_and_Configuration.md#api-gateway-integration))
+- [[Naming Conventions](../Naming_Conventions.md)](../[Naming Conventions](../Naming_Conventions.md))
 - [Terraform_Bootstrapping_Phase1.md](Terraform_Bootstrapping_Phase1.md)
-- [Monitoring_and_Alerting.md](../Monitoring_and_Alerting.md)
+- [[Monitoring and Alerting](../Monitoring_and_Alerting.md)](../[Monitoring and Alerting](../Monitoring_and_Alerting.md))
 - Source: "Detailed_Lambda_Function_Implementation_Phase1.docx", "Phase 1 – Lambda Function Implementation Details.pdf"
 
 ---
