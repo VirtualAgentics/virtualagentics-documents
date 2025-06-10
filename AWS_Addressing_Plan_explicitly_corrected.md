@@ -33,7 +33,7 @@ This document defines the authoritative network addressing and subnet allocation
 | VPC Name                | Environment | Purpose/Notes               | CIDR Block        | AWS Account                 |
 |-------------------------|-------------|-----------------------------|-------------------|-----------------------------|
 | va-prod-core-vpc        | prod        | Primary app/agent prod net  | 10.0.0.0/16       | va-prod-core-acct           |
-| va-prod-ai-vpc          | prod        | AI/ML/Research workloads    | 10.1.0.0/16       | va-prod-core-acct           |
+| va-prod-ai-vpc          | prod        | AI/ML/Research workloads    | 10.1.0.0/16       | va-prod-ai-acct           |
 | va-dev-core-vpc         | dev         | All dev/testing workloads   | 10.10.0.0/16      | va-dev-core-acct            |
 | va-sharedservices-vpc   | shared      | Shared infra/services       | 10.20.0.0/16      | va-sharedservices-acct      |
 | va-sandbox-vpc          | sandbox     | Experiments/playground      | 10.30.0.0/16      | va-sandbox-acct             |
