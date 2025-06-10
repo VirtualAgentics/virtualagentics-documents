@@ -54,6 +54,12 @@ This document defines all security, compliance, privacy, and operational control
 
 ### c) Monitoring, Logging, and Alerting
 
+
+## VPC Flow Logs Configuration
+
+VPC Flow Logs are **enabled** for the production VPC and other critical subnets in Phase 1. These logs are delivered to our central Log Archive account's S3 bucket to facilitate continuous monitoring, security auditing, and operational troubleshooting.
+
+
 - **CloudTrail enabled** org-wide; logs centralized and stored in Log Archive account.
 - **CloudWatch and AWS Config** monitor all resource changes, failures, and misconfigurations.
 - **Automated alarms:** Triggered on errors, unauthorized changes, or unusual activity.
@@ -121,8 +127,3 @@ This document defines all security, compliance, privacy, and operational control
 ---
 
 *End of document*
-
-
-## VPC Flow Logs Configuration
-
-VPC Flow Logs are **enabled** for the production VPC and other critical subnets in Phase 1. These logs are delivered to our central Log Archive account's S3 bucket to facilitate continuous monitoring, security auditing, and operational troubleshooting.
