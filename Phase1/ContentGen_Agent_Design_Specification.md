@@ -1,3 +1,15 @@
+---
+title: "ContentGen Agent Design Specification"
+status: "Draft"
+audience: "Internal – AI Engineering, DevOps, Phase 1 Agent Developers"
+authors: "VirtualAgentics AI Engineering Team"
+version: "0.2"
+date: "2025-06-11"
+gpt_model: "Edited and structured by GPT-4o"
+---
+
+# ContentGen Agent Design Specification
+
 VirtualAgentics Phase 1 — ContentGen Agent Design Specification
 1. Document Control
 | Version | Date | Author(s) | Reviewer(s) | Description |
