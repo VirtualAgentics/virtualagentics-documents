@@ -291,175 +291,175 @@ stateDiagram-v2
     Decommissioned --> [*] : Resources removed
 ```
 ## 7.1 Initialization / Startup
-AWS Clients Setup: On cold start, the Lambda initializes clients for S3, DynamoDB, SNS, CloudFront (if needed). These can be reused for multiple events in same container. Ensure environment variables for bucket names, etc., are read and stored.
-HTML Template Loading: If a separate template file is packaged (for HTML wrapper), the agent could load it into memory at startup (from local file or an environment string). Alternatively, define template string in code, so nothing to load. If we had more complex templates or external references (like fetch a header snippet from S3), could do it, but Phase 1 likely hardcoded minimal template.
-Secrets: Not needed. All config are environment or code. If CloudFront uses standard AWS credentials from Lambda role, no secret needed beyond that.
-Warm-up: Possibly none needed; first invocation might have a minor overhead loading markdown library. It's fine. Could consider compiling markdown patterns if possible, but overhead is small.
-Logging context: Log a startup message including which bucket it's publishing to (useful to verify config).
-No heavy computations to precompute.
-If the system had a backlog of events at cold start, it will process them one by one anyway. There's no persistent state except environment config.
-VPC cold start: If Lambda in VPC, cold start might be a bit slower establishing ENI for network. But once up, subsequent events quick. It's fine. Possibly needed if S3 endpoints in VPC or if we needed NAT for external. But not an issue to mention specifically.
+- **AWS Clients Setup**: On cold start, the Lambda initializes clients for S3, DynamoDB, SNS, CloudFront (if needed). These can be reused for multiple events in same container. Ensure environment variables for bucket names, etc., are read and stored.
+- **HTML Template Loading**: If a separate template file is packaged (for HTML wrapper), the agent could load it into memory at startup (from local file or an environment string). Alternatively, define template string in code, so nothing to load. If we had more complex templates or external references (like fetch a header snippet from S3), could do it, but Phase 1 likely hardcoded minimal template.
+- **Secrets**: Not needed. All config are environment or code. If CloudFront uses standard AWS credentials from Lambda role, no secret needed beyond that.
+- **Warm-up**: Possibly none needed; first invocation might have a minor overhead loading markdown library. It's fine. Could consider compiling markdown patterns if possible, but overhead is small.
+- **Logging context*: Log a startup message including which bucket it's publishing to (useful to verify config).
+- No heavy computations to precompute.
+- If the system had a backlog of events at cold start, it will process them one by one anyway. There's no persistent state except environment config.
+- **VPC cold start**: If Lambda in VPC, cold start might be a bit slower establishing ENI for network. But once up, subsequent events quick. It's fine. Possibly needed if S3 endpoints in VPC or if we needed NAT for external. But not an issue to mention specifically.
 ## 7.2 Runtime Behaviour Loop
-The Publish agent, like others, is event-driven one-off. Each invocation processes a single ReviewCompleted event. There's no loop aside from that.
-It does not poll or schedule; it strictly reacts to SNS triggers.
-If multiple events come concurrently, AWS may spin multiple container instances up to concurrency limit. There's no internal queue, SNS ensures delivery attempts.
-There's no persistent in-memory state to maintain across events. The Lambda ends after finishing an event. (It might stay warm to handle another event later, but the code is written idempotently each time).
-So runtime loop is basically:
-Wait for event (implicitly by AWS).
-Process event, exit.
+- The Publish agent, like others, is event-driven one-off. Each invocation processes a single ReviewCompleted event. There's no loop aside from that.
+- It does not poll or schedule; it strictly reacts to SNS triggers.
+- If multiple events come concurrently, AWS may spin multiple container instances up to concurrency limit. There's no internal queue, SNS ensures delivery attempts.
+- There's no persistent in-memory state to maintain across events. The Lambda ends after finishing an event. (It might stay warm to handle another event later, but the code is written idempotently each time).
+- So runtime loop is basically:
+  - Wait for event (implicitly by AWS).
+  - Process event, exit.
 ## 7.3 Error Handling & Recovery
-In-function errors: The code catches errors and emits PublishFailure events instead of crashing:
-If content not found or conversion fails, we handle and return gracefully (with an event).
-If S3 upload fails, likewise handle (maybe try then fail event).
-If SNS publish (ContentPublished event) fails at the end, it's a tricky one: the function might log error but still succeed from AWS perspective (we wouldn't want to throw unhandled because then SNS might retry event and double publish content, which we might want to avoid).
-Best to catch SNS publish failure, maybe send an error event if needed (though if content is live, maybe we could send a partial event or a CloudWatch alarm).
-Perhaps simpler: log error for manual attention (maybe set CloudWatch alarm on such log).
-If DB update fails, we log error as mentioned. Possibly also could raise a separate event or alarm since state is inconsistent. But as above, not making the whole pipeline fail since content is live.
-Lambda errors (uncaught): Ideally none remain uncaught. But if one did (like a coding bug), the Lambda invocation would error, causing SNS to retry the event. That could lead to duplicate attempt to publish. It's mostly idempotent (except maybe double ContentPublished event), but better to avoid.
-We should test and ensure all predictable exceptions are caught. Possibly wrap main logic in a try-catch-all to ensure any unexpected exceptions also result in at least a logged error, and maybe a PublishFailure event if possible.
-If it did error out without sending any event, SNS will redeliver up to a few times. Possibly the second attempt might succeed if it was a transient error or code bug may just happen again. If after retries it's still failing, the message ends in DLQ if configured.
-We prefer to capture error and produce a PublishFailure event so at least the pipeline knows to stop expecting it and can alert.
-Retriable scenarios:
-S3 or network: if it was a blip, an immediate retry likely suffices. If it fails after retries, it's likely not transient (like a permission issue or our code logic).
-We implement minimal retries where it makes sense. Many AWS errors will be captured as exceptions anyway to handle.
-Poison message scenario: If something about this specific content always causes a bug (like conversion library hitting a corner case and crashing), SNS would keep retrying and failing. Without manual intervention, it could get stuck.
-A DLQ could catch it, or our catch-all might at least produce a failure event and not rethrow, thus acknowledging the message to SNS so it won't retry.
-We will attempt to handle gracefully to avoid infinite retry: e.g., if conversion crashes, catch and fail event, then function returns normally so SNS sees success (from its perspective) even though logically content wasn't published. That stops SNS retries.
-The downside is content might be lost (we consider it failure and pipeline moves on). But better than stuck in loop.
-Post-failure process: If a PublishFailure is emitted, likely a human should see it in logs/alerts and possibly decide to handle it. Could involve:
-If content publish failed due to a system problem, fix system and perhaps manually trigger publish. They might re-publish by manually invoking the publish agent with same content id (or re-driving the pipeline from review stage).
-In Phase 1, there's no automated requeue for publish agent. Possibly on re-run of system, a manual trick (like republishing ContentReady events) would do it.
-Dead-letter queue: If we have SNS DLQ, any event not processed after retries could be landed there. We might not rely on that if we plan to catch errors internally.
-Could still configure one as last resort. For example, if our code itself crashed without error event, message could go to DLQ. The team could then inspect it and maybe manually publish the content or fix code and reprocess from DLQ.
-Summation: The agent tries to always either succeed or explicitly signal failure via events, rather than leaving things hanging.
+- **In-function errors**: The code catches errors and emits PublishFailure events instead of crashing:
+  - If content not found or conversion fails, we handle and return gracefully (with an event).
+  - If S3 upload fails, likewise handle (maybe try then fail event).
+  - If SNS publish (ContentPublished event) fails at the end, it's a tricky one: the function might log error but still succeed from AWS perspective (we wouldn't want to throw unhandled because then SNS might retry event and double publish content, which we might want to avoid).
+    - Best to catch SNS publish failure, maybe send an error event if needed (though if content is live, maybe we could send a partial event or a CloudWatch alarm).
+    - Perhaps simpler: log error for manual attention (maybe set CloudWatch alarm on such log).
+  - If DB update fails, we log error as mentioned. Possibly also could raise a separate event or alarm since state is inconsistent. But as above, not making the whole pipeline fail since content is live.
+- **Lambda errors (uncaught)**: Ideally none remain uncaught. But if one did (like a coding bug), the Lambda invocation would error, causing SNS to retry the event. That could lead to duplicate attempt to publish. It's mostly idempotent (except maybe double ContentPublished event), but better to avoid.
+  - We should test and ensure all predictable exceptions are caught. Possibly wrap main logic in a try-catch-all to ensure any unexpected exceptions also result in at least a logged error, and maybe a PublishFailure event if possible.
+  - If it did error out without sending any event, SNS will redeliver up to a few times. Possibly the second attempt might succeed if it was a transient error or code bug may just happen again. If after retries it's still failing, the message ends in DLQ if configured.
+  - We prefer to capture error and produce a PublishFailure event so at least the pipeline knows to stop expecting it and can alert.
+- **Retriable scenarios**:
+  - S3 or network: if it was a blip, an immediate retry likely suffices. If it fails after retries, it's likely not transient (like a permission issue or our code logic).
+  - We implement minimal retries where it makes sense. Many AWS errors will be captured as exceptions anyway to handle.
+- **Poison message scenario**: If something about this specific content always causes a bug (like conversion library hitting a corner case and crashing), SNS would keep retrying and failing. Without manual intervention, it could get stuck.
+  - A DLQ could catch it, or our catch-all might at least produce a failure event and not rethrow, thus acknowledging the message to SNS so it won't retry.
+  - We will attempt to handle gracefully to avoid infinite retry: e.g., if conversion crashes, catch and fail event, then function returns normally so SNS sees success (from its perspective) even though logically content wasn't published. That stops SNS retries.
+  - The downside is content might be lost (we consider it failure and pipeline moves on). But better than stuck in loop.
+- **Post-failure process*: If a PublishFailure is emitted, likely a human should see it in logs/alerts and possibly decide to handle it. Could involve:
+  - If content publish failed due to a system problem, fix system and perhaps manually trigger publish. They might re-publish by manually invoking the publish agent with same content id (or re-driving the pipeline from review stage).
+  - In Phase 1, there's no automated requeue for publish agent. Possibly on re-run of system, a manual trick (like republishing ContentReady events) would do it.
+- **Dead-letter queue**: If we have SNS DLQ, any event not processed after retries could be landed there. We might not rely on that if we plan to catch errors internally.
+  - Could still configure one as last resort. For example, if our code itself crashed without error event, message could go to DLQ. The team could then inspect it and maybe manually publish the content or fix code and reprocess from DLQ.
+  - Summation: The agent tries to always either succeed or explicitly signal failure via events, rather than leaving things hanging.
 ## 7.4 State Transitions & Persistence
-State: The Publish agent doesn’t maintain long-running state; it transitions the content's state from "reviewed" to "published". The actual record of state is in DynamoDB item status and in events logs.
-The pipeline’s idea of content state:
-Initially content in "draft" (generated, not yet reviewed).
-After review, content state "approved/pending publish".
-After publish, "published".
-These states are tracked by the events and DB updates. The Publish agent updates the DB to reflect the "published" state, completing the lifecycle.
-Persistence:
-The content itself is persisted by moving (or copying) from draft storage to final storage (S3 to S3).
-The original draft remains (unless we choose to delete). In any case, the published location holds the final content permanently.
-The DynamoDB entry is updated to reflect final info (published timestamp, etc.), serving as a persistent log or record.
-If a published content needed to be updated or removed, that would be outside Phase 1 (perhaps in future, an agent might unpublish or update on new info, but we have none in Phase 1).
-The system doesn't maintain any per-content memory in the agent itself across runs – all is in external storage.
+- **State*: The Publish agent doesn’t maintain long-running state; it transitions the content's state from "reviewed" to "published". The actual record of state is in DynamoDB item status and in events logs.
+- The pipeline’s idea of content state:
+  - Initially content in "draft" (generated, not yet reviewed).
+  - After review, content state "approved/pending publish".
+  - After publish, "published".
+  - These states are tracked by the events and DB updates. The Publish agent updates the DB to reflect the "published" state, completing the lifecycle.
+- **Persistence*:
+  - The content itself is persisted by moving (or copying) from draft storage to final storage (S3 to S3).
+  - The original draft remains (unless we choose to delete). In any case, the published location holds the final content permanently.
+  - The DynamoDB entry is updated to reflect final info (published timestamp, etc.), serving as a persistent log or record.
+- If a published content needed to be updated or removed, that would be outside Phase 1 (perhaps in future, an agent might unpublish or update on new info, but we have none in Phase 1).
+- The system doesn't maintain any per-content memory in the agent itself across runs – all is in external storage.
 ## 7.5 Shutdown / Termination
-The Lambda will terminate after processing the event, releasing any ephemeral resources.
-If partway through publishing an event the Lambda gets terminated (very unlikely unless it hit timeout or was killed by deployment), potential outcomes:
-It may have uploaded content but not updated DB or not emitted event. In such a scenario, content is live but pipeline didn't finalize. A new event might eventually re-trigger or an alert might cause manual fix. But since our tasks are quick, normally it finishes well before timeout.
-If we redeploy code mid-processing (rare because deployment is near instantaneous and Lambdas handle gracefully by either finishing or being replaced after invocation), no major issues, worst case a content might have to be retried.
-There's no special shutdown procedure needed.
-If the service is decommissioned or paused, content might stack up at review stage. But Phase 1 likely means if Publish agent is down, content remains approved but not published until agent returns. Not huge issue for short downtime; for long downtime they'd notice nothing is hitting site and check logs.
-Blue/green deploy doesn’t require draining anything since events not in flight can queue in SNS briefly until new version ready.
+- The Lambda will terminate after processing the event, releasing any ephemeral resources.
+- If partway through publishing an event the Lambda gets terminated (very unlikely unless it hit timeout or was killed by deployment), potential outcomes:
+  - It may have uploaded content but not updated DB or not emitted event. In such a scenario, content is live but pipeline didn't finalize. A new event might eventually re-trigger or an alert might cause manual fix. But since our tasks are quick, normally it finishes well before timeout.
+  - If we redeploy code mid-processing (rare because deployment is near instantaneous and Lambdas handle gracefully by either finishing or being replaced after invocation), no major issues, worst case a content might have to be retried.
+- There's no special shutdown procedure needed.
+- If the service is decommissioned or paused, content might stack up at review stage. But Phase 1 likely means if Publish agent is down, content remains approved but not published until agent returns. Not huge issue for short downtime; for long downtime they'd notice nothing is hitting site and check logs.
+- Blue/green deploy doesn’t require draining anything since events not in flight can queue in SNS briefly until new version ready.
 ## 7.6 Upgrade & Blue/Green Deployment Considerations
-Deployment: New versions of the Publish agent can be deployed with minimal fuss:
-While deploying, if an event arrives, it might be processed by either old version if still active or queued a second until new version is ready. Using Lambda aliases, one can cut over between versions.
-If worried about double or missing, one could temporarily pause the SNS subscription (but not easily done gracefully). Usually, we trust AWS to handle it seamlessly.
-If doing blue/green (like shifting alias gradually, which SNS doesn't support splitting traffic, so blue/green is basically manual test new alias with test events, then swap alias fully).
-Rollback: Already covered earlier: switch alias to old version if needed.
-No ordering guarantee needed on events, each content is independent, so deploying mid-stream doesn't break a sequence or anything.
-Make sure new version has correct config (especially if environment variables changed e.g., bucket name or CloudFront id).
-If new version changes output logic significantly (like using a different bucket or different file naming), ensure that is coordinated with site config (like if now adding a different prefix, site code knows or static site knows where to find it). Those changes need careful planning or simultaneous config updates (maybe in the System Arch).
-Because it’s last in pipeline, a faulty deployment could mean content isn't reaching site. The team should quickly catch that if no new content appears. We have alarms on PublishFailure events as well.
-Possibly maintain backward compatibility: If we changed the content format, the new agent might produce things differently. But since it's end of pipeline, backward compatibility matters only if, say, the site expects a certain format. We must coordinate with site. E.g., if we decided to not wrap HTML with <html> anymore, site might break if it expected full pages (if it's just serving that file raw).
-Usually, any changes to output format is considered carefully to not break site or to update site accordingly.
-Also if we changed event structure (like ContentPublished fields), it mainly affects any subscribers (maybe none in Phase 1).
-Summarily, upgrade is straightforward as far as pipeline continuity, with attention to configuration consistency.
+- **Deployment**: New versions of the Publish agent can be deployed with minimal fuss:
+  - While deploying, if an event arrives, it might be processed by either old version if still active or queued a second until new version is ready. Using Lambda aliases, one can cut over between versions.
+  - If worried about double or missing, one could temporarily pause the SNS subscription (but not easily done gracefully). Usually, we trust AWS to handle it seamlessly.
+- If doing blue/green (like shifting alias gradually, which SNS doesn't support splitting traffic, so blue/green is basically manual test new alias with test events, then swap alias fully).
+- **Rollback**: Already covered earlier: switch alias to old version if needed.
+- No ordering guarantee needed on events, each content is independent, so deploying mid-stream doesn't break a sequence or anything.
+- Make sure new version has correct config (especially if environment variables changed e.g., bucket name or CloudFront id).
+- If new version changes output logic significantly (like using a different bucket or different file naming), ensure that is coordinated with site config (like if now adding a different prefix, site code knows or static site knows where to find it). Those changes need careful planning or simultaneous config updates (maybe in the System Arch).
+- Because it’s last in pipeline, a faulty deployment could mean content isn't reaching site. The team should quickly catch that if no new content appears. We have alarms on PublishFailure events as well.
+- Possibly maintain backward compatibility: If we changed the content format, the new agent might produce things differently. But since it's end of pipeline, backward compatibility matters only if, say, the site expects a certain format. We must coordinate with site. E.g., if we decided to not wrap HTML with <html> anymore, site might break if it expected full pages (if it's just serving that file raw).
+- Usually, any changes to output format is considered carefully to not break site or to update site accordingly.
+- Also if we changed event structure (like ContentPublished fields), it mainly affects any subscribers (maybe none in Phase 1).
+- Summarily, upgrade is straightforward as far as pipeline continuity, with attention to configuration consistency.
 ## 8. Security & Compliance
 ### 8.1 IAM Role and Least-Privilege Policy Summary
 The Publish Lambda’s IAM role should allow:
-S3 Access:
-s3:GetObject for the drafts bucket va-phase1-content-objects (specifically the /drafts/* prefix) to read content.
-s3:PutObject for the public content bucket (e.g., va-phase1-site-content or same bucket’s /published/* prefix). Possibly also s3:PutObjectAcl if needed to set objects public, but if bucket policy auto makes them public based on prefix, we might not need ACL setting.
-If cleaning up, s3:DeleteObject on drafts (but we chose not to, so can omit).
-Ensure resource scope to exact bucket ARNs and prefixes (no wildcards beyond necessary).
-DynamoDB Access:
-dynamodb:UpdateItem on va-phase1-content table (for status updates).
-Possibly dynamodb:GetItem to fetch slug or details (if we didn't pass all needed info in event).
-Scope to specific table ARN.
-SNS Publish:
-sns:Publish to the /content/published topic ARN (for sending ContentPublished events).
-Also sns:Publish to error topic /content/errors (for failures).
-CloudFront Invalidation (if used):
-cloudfront:CreateInvalidation on the specific distribution (Arn including distribution ID).
-Possibly also cloudfront:GetDistribution if needed (not really for invalidation, just create is enough).
-This is an AWS global service call outside VPC, so ensure no VPC blocking if any. The role needs permission at least for CreateInvalidation. It can be scoped to the distribution ID's resource ARN (like arn:aws:cloudfront::<account-id>:distribution/<distribution-id>).
-Logs: Standard logs:CreateLogStream, logs:PutLogEvents for CloudWatch.
-No Secrets: If CloudFront distribution ID is not a secret (just config), no need for secrets manager. If site had basic auth or something (not mentioned), then would require secret. Phase 1, none.
-Least Privilege:
-Don’t allow delete or list on S3 unnecessarily. PutObject and maybe GetObject specifically for certain paths.
-If we consider general, listing bucket or entire table not needed.
-The put to S3 needs to cover any key pattern we might use. Possibly easier to allow entire bucket for put and maybe just the prefix for get from draft bucket. But better to restrict to known prefixes to avoid misuse.
-CloudFront invalidation for a single distribution only, not all.
-Other compliance:
-If bucket encryption is required, the objects should be encrypted by default (S3 default encryption). Our agent just puts objects, which S3 will encrypt because bucket policy says so, or we could specifically add encryption param (but not needed if bucket default).
-The agent's role doesn’t need access to content beyond what's needed to publish.
+- **S3 Access**:
+  - s3:GetObject for the drafts bucket va-phase1-content-objects (specifically the /drafts/* prefix) to read content.
+  - s3:PutObject for the public content bucket (e.g., va-phase1-site-content or same bucket’s /published/* prefix). Possibly also s3:PutObjectAcl if needed to set objects public, but if bucket policy auto makes them public based on prefix, we might not need ACL setting.
+  - If cleaning up, s3:DeleteObject on drafts (but we chose not to, so can omit).
+  - Ensure resource scope to exact bucket ARNs and prefixes (no wildcards beyond necessary).
+- **DynamoDB Access**:
+  - dynamodb:UpdateItem on va-phase1-content table (for status updates).
+  - Possibly dynamodb:GetItem to fetch slug or details (if we didn't pass all needed info in event).
+  - Scope to specific table ARN.
+- **SNS Publish*:
+  - sns:Publish to the /content/published topic ARN (for sending ContentPublished events).
+  - Also sns:Publish to error topic /content/errors (for failures).
+- **CloudFront Invalidation (if used)**:
+  - cloudfront:CreateInvalidation on the specific distribution (Arn including distribution ID).
+  - Possibly also cloudfront:GetDistribution if needed (not really for invalidation, just create is enough).
+  - This is an AWS global service call outside VPC, so ensure no VPC blocking if any. The role needs permission at least for CreateInvalidation. It can be scoped to the distribution ID's resource ARN (like arn:aws:cloudfront::<account-id>:distribution/<distribution-id>).
+- **Logs**: Standard logs:CreateLogStream, logs:PutLogEvents for CloudWatch.
+- **No Secrets**: If CloudFront distribution ID is not a secret (just config), no need for secrets manager. If site had basic auth or something (not mentioned), then would require secret. Phase 1, none.
+   **Least Privilege**:
+  -Don’t allow delete or list on S3 unnecessarily. PutObject and maybe GetObject specifically for certain paths.
+  - If we consider general, listing bucket or entire table not needed.
+  - The put to S3 needs to cover any key pattern we might use. Possibly easier to allow entire bucket for put and maybe just the prefix for get from draft bucket. But better to restrict to known prefixes to avoid misuse.
+  - CloudFront invalidation for a single distribution only, not all.
+- **Other compliance**:
+  - If bucket encryption is required, the objects should be encrypted by default (S3 default encryption). Our agent just puts objects, which S3 will encrypt because bucket policy says so, or we could specifically add encryption param (but not needed if bucket default).
+  - The agent's role doesn’t need access to content beyond what's needed to publish.
 ## 8.2 Secrets Management
-There are no direct secrets used by the Publish agent in Phase 1.
-The CloudFront invalidation uses IAM auth of the role, no secret keys required (using AWS SDK).
-If an external CMS API were used, that would require an API key/secret, likely from Secrets Manager. But since using AWS S3, none needed.
-The site URL or config are not secrets.
-Ensure not to embed any credentials in code. All is via role policies.
-Possibly consider the domain name of the site as not sensitive, just config.
+- There are no direct secrets used by the Publish agent in Phase 1.
+- The CloudFront invalidation uses IAM auth of the role, no secret keys required (using AWS SDK).
+- If an external CMS API were used, that would require an API key/secret, likely from Secrets Manager. But since using AWS S3, none needed.
+- The site URL or config are not secrets.
+- Ensure not to embed any credentials in code. All is via role policies.
+ Possibly consider the domain name of the site as not sensitive, just config.
 ## 8.3 Data Classification & Encryption
-Content Data: The published content is intended for public consumption, so it's not sensitive at all. However, until it's published, it might be considered internal. But once published, it's public. The Publish agent deals with content that is now approved to be public, so there's no confidentiality requirement on it.
-However, all data transfer still occurs over AWS secure channels:
-S3 access is within AWS network (or TLS if going over internet endpoints).
-DynamoDB calls are encrypted in transit by AWS.
-CloudFront invalidation calls are to AWS API (HTTPS).
-So all in-transit encryption best practices are by default done.
-At rest: The content in S3 (both draft and published) is encrypted at rest by S3's SSE (AES-256). The published bucket might be public for read, but objects are still stored encrypted. This is good (though doesn't matter to end user because they get decrypted version via http).
-Integrity: The agent should ensure content isn’t tampered with during publish:
-It reads from an internal source it trusts (the S3 where only our pipeline writes).
-It writes to a target with correctness.
-There's no step where data is open to tampering except perhaps if an attacker had access to the pipeline or S3, which is controlled by IAM. So, maintain strict IAM to avoid unauthorized modifications.
-Compliance with deletion requests: Not relevant for content. If content needed to be removed (maybe due to policy or user request), Phase 1 hasn't covered that. But since content is not personal data, no immediate compliance concern (like GDPR right to be forgotten). It's marketing content the company itself created.
-Audit and logs: CloudTrail logs all S3 and DynamoDB operations by this agent’s role. So if needed, we can audit who published what when. Also, the DynamoDB item has a timestamp which helps.
-No PII: It's possible an article might incidentally mention names or something, but as marketing content, there's no expectation of personal user data being processed by this agent. So privacy compliance is not directly applicable here.
+- **Content Data**: The published content is intended for public consumption, so it's not sensitive at all. However, until it's published, it might be considered internal. But once published, it's public. The Publish agent deals with content that is now approved to be public, so there's no confidentiality requirement on it.
+- However, all data transfer still occurs over AWS secure channels:
+  - S3 access is within AWS network (or TLS if going over internet endpoints).
+  - DynamoDB calls are encrypted in transit by AWS.
+  - CloudFront invalidation calls are to AWS API (HTTPS).
+  - So all in-transit encryption best practices are by default done.
+- **At rest**: The content in S3 (both draft and published) is encrypted at rest by S3's SSE (AES-256). The published bucket might be public for read, but objects are still stored encrypted. This is good (though doesn't matter to end user because they get decrypted version via http).
+- **Integrity**: The agent should ensure content isn’t tampered with during publish:
+  - It reads from an internal source it trusts (the S3 where only our pipeline writes).
+  - It writes to a target with correctness.
+  - There's no step where data is open to tampering except perhaps if an attacker had access to the pipeline or S3, which is controlled by IAM. So, maintain strict IAM to avoid unauthorized modifications.
+- **Compliance with deletion requests**: Not relevant for content. If content needed to be removed (maybe due to policy or user request), Phase 1 hasn't covered that. But since content is not personal data, no immediate compliance concern (like GDPR right to be forgotten). It's marketing content the company itself created.
+- **Audit and logs**: CloudTrail logs all S3 and DynamoDB operations by this agent’s role. So if needed, we can audit who published what when. Also, the DynamoDB item has a timestamp which helps.
+- **No PII**: It's possible an article might incidentally mention names or something, but as marketing content, there's no expectation of personal user data being processed by this agent. So privacy compliance is not directly applicable here.
 ## 8.4 Audit Logging Requirements
-The Publish agent logs significant actions:
-It should log that it received a content for publishing (with content_id and maybe slug) – an INFO log.
-It logs success of each major step: e.g. "Converted markdown to HTML for content X" (maybe DEBUG or not needed if always succeed).
-"Uploaded content X to bucket Y at key Z" – success confirmation.
-If CloudFront invalidation is done, log "Invalidation requested for /posts/slug".
-If any step fails, log an ERROR with details (and also send event). The logs provide more technical context (stack trace etc).
-These logs form an audit trail in CloudWatch: one can see for each content when it got published and to where.
-Additionally, the DynamoDB update can serve as an audit record (published_at timestamp).
-CloudTrail (for S3 and Dynamo) will show the API calls:
-e.g., PutObject by lambda-role at time X for file Y.
-That can be used to verify if needed (rarely needed unless diagnosing an outside-of-pipeline addition).
-We might not have a formal "audit report", but logs + DB suffice.
-If required, we could in future gather contentPublished events into a central log (like an internal analytics DB of published content). But Phase 1 likely uses the DynamoDB table as source of truth for content states.
-There should also be an alarm if content publishing fails (which we'll set up in Observability).
+- The Publish agent logs significant actions:
+  - It should log that it received a content for publishing (with content_id and maybe slug) – an INFO log.
+  - It logs success of each major step: e.g. "Converted markdown to HTML for content X" (maybe DEBUG or not needed if always succeed).
+  - "Uploaded content X to bucket Y at key Z" – success confirmation.
+  - If CloudFront invalidation is done, log "Invalidation requested for /posts/slug".
+  - If any step fails, log an ERROR with details (and also send event). The logs provide more technical context (stack trace etc).
+- These logs form an audit trail in CloudWatch: one can see for each content when it got published and to where.
+- Additionally, the DynamoDB update can serve as an audit record (published_at timestamp).
+- CloudTrail (for S3 and Dynamo) will show the API calls:
+  - e.g., PutObject by lambda-role at time X for file Y.
+  - That can be used to verify if needed (rarely needed unless diagnosing an outside-of-pipeline addition).
+- We might not have a formal "audit report", but logs + DB suffice.
+- If required, we could in future gather contentPublished events into a central log (like an internal analytics DB of published content). But Phase 1 likely uses the DynamoDB table as source of truth for content states.
+- There should also be an alarm if content publishing fails (which we'll set up in Observability).
 Perhaps maintain a metric or log for content count published for trending (for analytics, but not a direct audit requirement).
-Ensure logs do not contain sensitive info:
-They will contain content_id, slug, maybe the title. That’s fine (title is intended to be public anyway).
-No credentials.
-They might contain partial content or snippet in error messages if conversion failed at a certain line, but that content is intended public anyway.
-So no log scrubbing needed beyond normal.
+- Ensure logs do not contain sensitive info:
+  - They will contain content_id, slug, maybe the title. That’s fine (title is intended to be public anyway).
+  - No credentials.
+  - They might contain partial content or snippet in error messages if conversion failed at a certain line, but that content is intended public anyway.
+- So no log scrubbing needed beyond normal.
 ## 9. Observability
 ### 9.1 Logging
 Logging strategy:
-Structured Logging: Use a structured format (JSON or key-value) for important events. Eg:
-INFO {"action":"StartPublish","content_id":"1234-uuid","slug":"ai-in-finance-how-it-works"}
-INFO {"action":"UploadSuccess","content_id":"1234-uuid","bucket":"va-phase1-site-content","key":"posts/ai-in-finance-how-it-works.html"}
-INFO {"action":"Published","content_id":"1234-uuid","url":"https://.../ai-in-finance-how-it-works.html","status":"success"} or similarly at end.
-ERROR {"action":"PublishFailed","content_id":"1234-uuid","error":"Markdown conversion error: ..."}
-Each log includes content_id to correlate logs to a piece of content.
-We ensure not to log entire content HTML (which is public anyway, but not needed in logs). Summaries like "converted content length X chars" could be logged if needed for debugging sizes.
-Levels:
-Use INFO for normal milestones (starting, uploaded, completed).
-WARN if something non-critical fails (like DB update or CloudFront invalidation but content is live).
-ERROR for failures that stop publishing. Those should coincide with sending a PublishFailure event.
-No PII or secrets in logs: Only content and technical info. All fine.
-CloudWatch Logs will aggregate these. We might set retention to e.g. 90 days or per policy.
-Could also log timing info if needed (like conversion took X ms, upload took Y ms).
-Possibly assign unique execution IDs (though AWS request ID can serve for grouping logs of one invocation).
-Also ensure the error logs include enough detail to diagnose (like exception message, maybe truncated stacktrace if needed).
-For example, if markdown conversion fails, output the exception text which might say what line or char caused error.
-Logging environment config at startup can also be helpful: "Using bucket A and bucket B, distribution D". This appears in logs once per cold start typically and helps troubleshooting config issues.
+- **Structured Logging**: Use a structured format (JSON or key-value) for important events. Eg:
+  - INFO {"action":"StartPublish","content_id":"1234-uuid","slug":"ai-in-finance-how-it-works"}
+  - INFO {"action":"UploadSuccess","content_id":"1234-uuid","bucket":"va-phase1-site-content","key":"posts/ai-in-finance-how-it-works.html"}
+  - INFO {"action":"Published","content_id":"1234-uuid","url":"https://.../ai-in-finance-how-it-works.html","status":"success"} or similarly at end.
+  - ERROR {"action":"PublishFailed","content_id":"1234-uuid","error":"Markdown conversion error: ..."}
+- Each log includes content_id to correlate logs to a piece of content.
+- We ensure not to log entire content HTML (which is public anyway, but not needed in logs). Summaries like "converted content length X chars" could be logged if needed for debugging sizes.
+- **Levels**:
+  - Use INFO for normal milestones (starting, uploaded, completed).
+  - WARN if something non-critical fails (like DB update or CloudFront invalidation but content is live).
+  - ERROR for failures that stop publishing. Those should coincide with sending a PublishFailure event.
+- **No PII or secrets in logs**: Only content and technical info. All fine.
+- CloudWatch Logs will aggregate these. We might set retention to e.g. 90 days or per policy.
+- Could also log timing info if needed (like conversion took X ms, upload took Y ms).
+- Possibly assign unique execution IDs (though AWS request ID can serve for grouping logs of one invocation).
+- Also ensure the error logs include enough detail to diagnose (like exception message, maybe truncated stacktrace if needed).
+- For example, if markdown conversion fails, output the exception text which might say what line or char caused error.
+- Logging environment config at startup can also be helpful: "Using bucket A and bucket B, distribution D". This appears in logs once per cold start typically and helps troubleshooting config issues.
 ## 9.2 Metrics
 Key metrics for the Publish agent:
 Publish.SuccessCount – increment for each content published successfully (i.e., ContentPublished event sent). Allows tracking volume of published content over time.
