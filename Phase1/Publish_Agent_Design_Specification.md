@@ -7,9 +7,7 @@ version: "0.2"
 date: "2025-06-11"
 gpt_model: "Edited and structured by GPT-4o"
 ---
-# Publish Agent Design Specification
 
-VirtualAgentics Phase 1 — Publish Agent Design Specification
 ## 1. Document Control
 | Version | Date | Author(s) | Reviewer(s) | Description |
 | --- | --- | --- | --- | --- |
