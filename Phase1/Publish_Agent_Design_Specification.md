@@ -81,16 +81,25 @@ If any failure occurs during publishing, the agent would instead publish an erro
 ## 4.2 Synchronous APIs / Webhooks
 None. The Publish agent is entirely event-driven and does not expose any web API. (In the future, maybe an API to re-trigger a publish or publish external content could exist, but not in Phase 1.)
 ## 4.3 Data-Store Interfaces
-DynamoDB:
-Table: va-phase1-content.
-Access: Update – The agent updates the content record to mark it published (e.g., setting status to "published" and possibly adding the URL or publish timestamp). It may also Read the record to fetch any details needed for publishing (e.g., slug or category if stored).
-S3:
-Source Bucket: va-phase1-content-objects (the drafts bucket).
-Access: GetObject to retrieve the draft content (if not already included in event, which it likely isn't to avoid size issues). Specifically reads from /drafts/{content_id}.md or the reviewed location (if Review agent saved an edited version in same place).
-Destination Bucket: va-phase1-public-content (for example, a public website bucket or path). Possibly this is the same bucket with a different prefix, or a separate bucket. For static site, it could be the same bucket but moving from /drafts to /published.
-Access: PutObject to write the final content file to its public location (e.g., /posts/{slug}.html or similar). Also maybe PutObjectAcl if making it public, but usually bucket policy handles that. If using the same bucket with CloudFront, might not need ACL.
-Possibly DeleteObject if we want to remove the draft file after publish (not mandatory, might keep drafts for record). Phase 1 likely keeps it or doesn’t bother to delete.
-(If using a CMS API or database, those would appear here, but Phase 1 uses S3 for content presumably.)
+
+- **DynamoDB**:
+  - *Table*: `va-phase1-content`.
+  - *Access*:
+    - **Update** – The agent updates the content record to mark it published (e.g., setting status to `"published"` and possibly adding the URL or publish timestamp).
+    - **Read** – To fetch any details needed for publishing (e.g., slug or category if stored).
+
+- **S3**:
+  - *Source Bucket*: `va-phase1-content-objects` (the drafts bucket).
+    - Access: **GetObject** to retrieve the draft content (if not already included in event, which it likely isn't to avoid size issues). Specifically reads from `/drafts/{content_id}.md` or the reviewed location (if Review agent saved an edited version in same place).
+
+  - *Destination Bucket*: `va-phase1-public-content` (for example, a public website bucket or path). Possibly this is the same bucket with a different prefix, or a separate bucket. For static sites, it could be the same bucket but moving from `/drafts` to `/published`.
+    - Access:
+      - **PutObject** to write the final content file to its public location (e.g., `/posts/{slug}.html` or similar).
+      - Possibly **PutObjectAcl** if making it public, but usually bucket policy handles that. If using the same bucket with CloudFront, might not need ACL.
+      - Possibly **DeleteObject** if we want to remove the draft file after publish (not mandatory, might keep drafts for record). Phase 1 likely keeps it or doesn’t bother to delete.
+
+(*If using a CMS API or database, those would appear here, but Phase 1 uses S3 for content presumably.*)
+
 ## 4.4 External Service Calls
 Possibly CloudFront Invalidation API: If the site is served via CloudFront, after uploading new content, the agent might call CloudFront to invalidate the cache for that content or update an index page. If so, it requires an external AWS API call (cloudfront:CreateInvalidation).
 Not sure if Phase 1 includes a CloudFront distribution for site, but likely yes if static site approach. We'll include it as a possible call.
