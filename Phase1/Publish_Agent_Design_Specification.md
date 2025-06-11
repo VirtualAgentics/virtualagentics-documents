@@ -43,21 +43,23 @@ Supports the autonomous pipeline by removing the need for manual content uploadi
 
 
 ## 2.4 Dependencies
-Upstream: Subscribes to ReviewCompleted events (or equivalent) from the Review agent, which indicate content that is ready to be published. Without an approval event, the Publish agent does nothing.
-Downstream: In terms of events, it may emit a ContentPublished event as a final signal (for analytics or acknowledgments). Also, the content is placed in a live content store (S3 bucket for website, etc.), making it accessible to end users. That content store could be considered a dependency too if there's a CDN or website reading from it.
-External: Possibly none in Phase 1 if using S3 static site. If publishing to an external CMS or using a service like WordPress API, that would be an external dependency (with network calls). In Phase 1, assume publishing to an S3 website (internal to AWS).
-Services: CloudFront CDN if it caches the site (would need an invalidation, perhaps). Not explicitly stated, but likely Phase 1 might not have CDN integration beyond static hosting.
+
+- **Upstream**: Subscribes to ReviewCompleted events (or equivalent) from the Review agent, which indicate content that is ready to be published. Without an approval event, the Publish agent does nothing.
+- **Downstream**: In terms of events, it may emit a ContentPublished event as a final signal (for analytics or acknowledgments). Also, the content is placed in a live content store (S3 bucket for website, etc.), making it accessible to end users. That content store could be considered a dependency too if there's a CDN or website reading from it.
+- **External**: Possibly none in Phase 1 if using S3 static site. If publishing to an external CMS or using a service like WordPress API, that would be an external dependency (with network calls). In Phase 1, assume publishing to an S3 website (internal to AWS).
+- **Services**: CloudFront CDN if it caches the site (would need an invalidation, perhaps). Not explicitly stated, but likely Phase 1 might not have CDN integration beyond static hosting.
+
 ## 3. Architecture & System Context
 ### 3.1 High-Level Context Diagram
 (Diagram to be inserted.) The Publish agent is implemented as an AWS Lambda triggered by an SNS topic for reviewed content (approval events). It retrieves the content (by content_id) from the internal content store (the same S3 bucket used for drafts, or maybe a separate staging area), then processes and transfers it to a public location (for instance, moving the file to a "published" prefix or different bucket accessible by the website). If needed, it converts markdown to HTML. The agent then signals completion. It interacts with AWS services like S3 and possibly DynamoDB (to update content status). There is no direct user interaction; the published content is consumed by web users via the website (which could be backed by that S3 or CMS).
 ## 3.2 Deployment Target
-Platform: AWS Lambda (Python 3.11 runtime).
-Environment: Deployed to dev and prod, likely in the same environment as other Lambdas. It might need access to a different S3 bucket (the live site bucket) possibly in a public-facing zone. If the site bucket is public, Lambda may not need VPC. But if it’s internal, ensure correct VPC or endpoint. For our context, likely just normal S3 access.
-Trigger: Configured to be invoked by SNS topic (e.g., /content/reviewed). Possibly an EventBridge rule could also trigger it if we had scheduled publishing, but Phase 1 uses event-driven immediate publishing.
+- **Platform**: AWS Lambda (Python 3.11 runtime).
+- **Environment**: Deployed to dev and prod, likely in the same environment as other Lambdas. It might need access to a different S3 bucket (the live site bucket) possibly in a public-facing zone. If the site bucket is public, Lambda may not need VPC. But if it’s internal, ensure correct VPC or endpoint. For our context, likely just normal S3 access.
+- **Trigger**: Configured to be invoked by SNS topic (e.g., /content/reviewed). Possibly an EventBridge rule could also trigger it if we had scheduled publishing, but Phase 1 uses event-driven immediate publishing.
 ## 3.3 Runtime Environment & Resource Profile
-Memory: 256 MB (to align with others). Publishing tasks are not heavy, but conversion to HTML might use some CPU; 256 is more than enough. If content is large, converting to HTML might briefly use memory proportional to content size (which is small relative to 256MB).
+- **Memory**: 256 MB (to align with others). Publishing tasks are not heavy, but conversion to HTML might use some CPU; 256 is more than enough. If content is large, converting to HTML might briefly use memory proportional to content size (which is small relative to 256MB).
 Timeout: 30 seconds (like others). Typically publishing should be quick (a few hundred ms for S3 operations, maybe up to a second for conversion). But if there's a CDN invalidation step, that might take a few seconds (still under 30).
-Concurrency: 2 (similar default limit). It's rare to have multiple publish events at the exact same time given pipeline flow, but if two reviews finish at once, the publish can handle them concurrently. If needed (very high volume), concurrency could be raised, but Phase 1 doesn’t require more.
+- **Concurrency**: 2 (similar default limit). It's rare to have multiple publish events at the exact same time given pipeline flow, but if two reviews finish at once, the publish can handle them concurrently. If needed (very high volume), concurrency could be raised, but Phase 1 doesn’t require more.
 Resource Usage: Minimal CPU for format conversion, some network I/O to S3. No heavy external calls, so resource usage is generally light.
 ## 4. Interfaces
 ### 4.1 Event-Driven Interfaces
@@ -73,7 +75,7 @@ The Publish agent listens for ReviewCompleted events indicating content that pas
 | --- | --- | --- | --- |
 | ContentPublished | /content/published | content-published-v1.json | (Optional) Analytics systems, or general event bus for logs |
 
-ContentPublished: Emitted when an article has been successfully published. It serves as a final confirmation in the pipeline. In Phase 1, there may not be an active consumer of this event (other than logging or maybe triggering a simple counter). But it can be used by future analytics or to signal the CMO agent that the content is live. It typically carries the content_id and possibly the public URL or location of the content.
+**ContentPublished**: Emitted when an article has been successfully published. It serves as a final confirmation in the pipeline. In Phase 1, there may not be an active consumer of this event (other than logging or maybe triggering a simple counter). But it can be used by future analytics or to signal the CMO agent that the content is live. It typically carries the content_id and possibly the public URL or location of the content.
 If any failure occurs during publishing, the agent would instead publish an error event (see Error Outputs) rather than a ContentPublished.
 (Note: ContentPublished event might not be strictly required, but including it for completeness. If not needed, the agent could just log success. But having the event is good practice for consistency.)
 ## 4.2 Synchronous APIs / Webhooks
