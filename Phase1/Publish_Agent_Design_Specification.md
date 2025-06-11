@@ -7,24 +7,14 @@ version: "0.2"
 date: "2025-06-11"
 gpt_model: "Edited and structured by GPT-4o"
 ---
-
-## 1. Document Control
-| Version | Date | Author(s) | Reviewer(s) | Description |
-| --- | --- | --- | --- | --- |
-| 0.1 | 2025-06-11 | AI Engineering Team | AI Engineering Team | Initial draft |
-
-Related documents:
-System Architecture Overview
-Agent Communication and Events Spec
-Security & Compliance Policies
-## 2. Overview
-### 2.1 Agent Purpose and Goals
+## 1. Overview
+### 1.1 Agent Purpose and Goals
 The Publish agent autonomously publishes approved content to the final destination (e.g., website or content repository). Its primary function in Phase 1 is to take reviewed articles and make them publicly accessible by converting them to the proper format and deploying them. This agent ensures that once content has passed review, it is reliably delivered to the publication platform without human intervention, closing the content pipeline loop.
-## 2.2 Context within VirtualAgentics
+## 1.2 Context within VirtualAgentics
 Belongs to the IT/Publishing or Web Operations domain – effectively acting as the “webmaster” or content manager.
 Works after the Review agent: it subscribes to approved content events and handles final publishing steps. It is the last agent in the Phase 1 content pipeline, outputting content to the live site or repository.
 Supports the autonomous pipeline by removing the need for manual content uploading or formatting. It ensures content moves from internal storage to customer-facing channels seamlessly.
-## 2.3 Scope & Assumptions
+## 1.3 Scope & Assumptions
 
 **In scope:**
 - Receiving notification of approved content and fetching that content for publishing.
@@ -40,35 +30,35 @@ Supports the autonomous pipeline by removing the need for manual content uploadi
 - Manual editorial adjustments (the content is published as given; no agent tweaks content at this stage beyond format conversion).
 
 
-## 2.4 Dependencies
+## 1.4 Dependencies
 
 - **Upstream**: Subscribes to ReviewCompleted events (or equivalent) from the Review agent, which indicate content that is ready to be published. Without an approval event, the Publish agent does nothing.
 - **Downstream**: In terms of events, it may emit a ContentPublished event as a final signal (for analytics or acknowledgments). Also, the content is placed in a live content store (S3 bucket for website, etc.), making it accessible to end users. That content store could be considered a dependency too if there's a CDN or website reading from it.
 - **External**: Possibly none in Phase 1 if using S3 static site. If publishing to an external CMS or using a service like WordPress API, that would be an external dependency (with network calls). In Phase 1, assume publishing to an S3 website (internal to AWS).
 - **Services**: CloudFront CDN if it caches the site (would need an invalidation, perhaps). Not explicitly stated, but likely Phase 1 might not have CDN integration beyond static hosting.
 
-## 3. Architecture & System Context
-### 3.1 High-Level Context Diagram
+## 2. Architecture & System Context
+### 2.1 High-Level Context Diagram
 (Diagram to be inserted.) The Publish agent is implemented as an AWS Lambda triggered by an SNS topic for reviewed content (approval events). It retrieves the content (by content_id) from the internal content store (the same S3 bucket used for drafts, or maybe a separate staging area), then processes and transfers it to a public location (for instance, moving the file to a "published" prefix or different bucket accessible by the website). If needed, it converts markdown to HTML. The agent then signals completion. It interacts with AWS services like S3 and possibly DynamoDB (to update content status). There is no direct user interaction; the published content is consumed by web users via the website (which could be backed by that S3 or CMS).
 ## 3.2 Deployment Target
-- **Platform**: AWS Lambda (Python 3.11 runtime).
+- **Platform**: AWS Lambda (Python 2.11 runtime).
 - **Environment**: Deployed to dev and prod, likely in the same environment as other Lambdas. It might need access to a different S3 bucket (the live site bucket) possibly in a public-facing zone. If the site bucket is public, Lambda may not need VPC. But if it’s internal, ensure correct VPC or endpoint. For our context, likely just normal S3 access.
 - **Trigger**: Configured to be invoked by SNS topic (e.g., /content/reviewed). Possibly an EventBridge rule could also trigger it if we had scheduled publishing, but Phase 1 uses event-driven immediate publishing.
-## 3.3 Runtime Environment & Resource Profile
+## 2.3 Runtime Environment & Resource Profile
 - **Memory**: 256 MB (to align with others). Publishing tasks are not heavy, but conversion to HTML might use some CPU; 256 is more than enough. If content is large, converting to HTML might briefly use memory proportional to content size (which is small relative to 256MB).
 Timeout: 30 seconds (like others). Typically publishing should be quick (a few hundred ms for S3 operations, maybe up to a second for conversion). But if there's a CDN invalidation step, that might take a few seconds (still under 30).
 - **Concurrency**: 2 (similar default limit). It's rare to have multiple publish events at the exact same time given pipeline flow, but if two reviews finish at once, the publish can handle them concurrently. If needed (very high volume), concurrency could be raised, but Phase 1 doesn’t require more.
-Resource Usage: Minimal CPU for format conversion, some network I/O to S3. No heavy external calls, so resource usage is generally light.
-## 4. Interfaces
-### 4.1 Event-Driven Interfaces
-4.1.1 Subscribed Events
+Resource Usage: Minimal CPU for format conversion, some network I/O to S2. No heavy external calls, so resource usage is generally light.
+## 3. Interfaces
+### 3.1 Event-Driven Interfaces
+3.1.1 Subscribed Events
 | Event Name | Topic | Schema Reference | Source |
 | --- | --- | --- | --- |
 | ReviewCompleted | /content/reviewed | content-reviewed-v1.json | Review agent |
 
 The Publish agent listens for ReviewCompleted events indicating content that passed review. The event includes the content_id and possibly some metadata like status or URL stub. This is the trigger for the publish process.
 (If naming differs, e.g., ContentApproved, the subscription would adjust accordingly. Here we use ReviewCompleted as per context.)
-4.1.2 Published Events
+3.1.2 Published Events
 | Event Name | Topic | Payload Schema | Destination(s) |
 | --- | --- | --- | --- |
 | ContentPublished | /content/published | content-published-v1.json | (Optional) Analytics systems, or general event bus for logs |
@@ -76,9 +66,9 @@ The Publish agent listens for ReviewCompleted events indicating content that pas
 **ContentPublished**: Emitted when an article has been successfully published. It serves as a final confirmation in the pipeline. In Phase 1, there may not be an active consumer of this event (other than logging or maybe triggering a simple counter). But it can be used by future analytics or to signal the CMO agent that the content is live. It typically carries the content_id and possibly the public URL or location of the content.
 If any failure occurs during publishing, the agent would instead publish an error event (see Error Outputs) rather than a ContentPublished.
 (Note: ContentPublished event might not be strictly required, but including it for completeness. If not needed, the agent could just log success. But having the event is good practice for consistency.)
-## 4.2 Synchronous APIs / Webhooks
+## 3.2 Synchronous APIs / Webhooks
 None. The Publish agent is entirely event-driven and does not expose any web API. (In the future, maybe an API to re-trigger a publish or publish external content could exist, but not in Phase 1.)
-## 4.3 Data-Store Interfaces
+## 3.3 Data-Store Interfaces
 
 - **DynamoDB**:
   - *Table*: `va-phase1-content`.
@@ -98,7 +88,7 @@ None. The Publish agent is entirely event-driven and does not expose any web API
 
 (*If using a CMS API or database, those would appear here, but Phase 1 uses S3 for content presumably.*)
 
-## 4.4 External Service Calls
+## 3.4 External Service Calls
 
 - **Possibly CloudFront Invalidation API**:  
   If the site is served via CloudFront, after uploading new content, the agent might call CloudFront to invalidate the cache for that content or update an index page. If so, it requires an external AWS API call (`cloudfront:CreateInvalidation`).
@@ -111,8 +101,8 @@ None. The Publish agent is entirely event-driven and does not expose any web API
   - **CloudFront**: if needed (external to Lambda in the sense of a separate AWS service API).
   - Otherwise, no third-party services.
 
-## 5. Inputs & Outputs
-### 5.1 Input Catalogue
+## 4. Inputs & Outputs
+### 4.1 Input Catalogue
 Inputs come from the ReviewCompleted event and any referenced data:
 | Name | Format | Source | Required | Validation |
 | --- | --- | --- | --- | --- |
@@ -134,7 +124,7 @@ Inputs come from the ReviewCompleted event and any referenced data:
 
 The agent validates that `content_id` exists and that it can retrieve the content file. If those fail, it's error output time.
 
-## 5.2 Output Catalogue
+## 4.2 Output Catalogue
 Outputs include the actual published content artifact and events/logs:
 | Name | Format | Destination | Consumer |
 | --- | --- | --- | --- |
@@ -148,7 +138,7 @@ Outputs include the actual published content artifact and events/logs:
 
 - *ContentPublished event*: A final event broadcast. It might contain `content_id` and possibly the public URL (like https://site.com/posts/slug). In Phase 1, no active agent might listen, but we include it for completeness and in case a monitoring tool or analytic event collector picks it up. It’s good for decoupling – e.g., a future Analytics agent could subscribe and log web analytics setup.
 
-## 5.3 Error/Exception Outputs
+## 4.3 Error/Exception Outputs
 If publishing fails (e.g., can't upload, conversion error), the agent emits error events:
 | Error Name | Format | Output (Topic) | Notes |
 | --- | --- | --- | --- |
@@ -161,8 +151,8 @@ If publishing fails (e.g., can't upload, conversion error), the agent emits erro
 
 All errors go to the common `/content/errors` topic. In Phase 1, an ops alarm would catch these so team can intervene. If a *PublishFailure* occurs, the content might remain in "reviewed but not published" state; resolution might involve manual publish or redeploying fix and reprocessing event.
 
-## 6. Internal Processing Logic
-### 6.1 Processing Flow Diagram / Pseudocode
+## 5. Internal Processing Logic
+### 5.1 Processing Flow Diagram / Pseudocode
 - **On ReviewCompleted Event**:
 - **Extract content_id (and slug if provided)**: From the event message, get the content identifier and any relevant metadata (title, etc.).
 - **Fetch content from S3**: Retrieve the markdown file for the given content_id from the drafts bucket. If not found or access denied, emit PublishFailure (with reason "content file missing"). (This scenario indicates a pipeline bug, as review should ensure content exists. It's an error path though.)
@@ -215,7 +205,7 @@ log("WARN: DynamoDB update failed", e)
 
 publishEvent("ContentPublished", {content_id: content_id, url: generate_public_url(out_key)})
 ```
-## 6.2 Key Algorithms or Data Processing
+## 5.2 Key Algorithms or Data Processing
 - **Markdown to HTML Conversion**: Using a library like markdown2 or python-markdown. Possibly with some extensions (like code formatting or tables if needed). The agent should ensure relative links or images in markdown still work. If images were included in content, likely ContentGen didn't handle images in Phase 1, so not an issue.
   - Confirm that the output HTML is well-formed. If the markdown had a title (maybe first line ```# Title```), the converter will produce ```<h1>Title</h1>```. We might want to wrap content with ```<html><head><title>Title</title></head><body> ... content ... </body></html>``` if the static site expects full HTML pages. Possibly optional if static site uses something like Jekyll (but if we had Jekyll, we might not be doing conversion here, we’d just output markdown to a repo).
   - We'll assume for Phase 1, we want a self-contained HTML page per article (makes it directly publishable via S3 static hosting). So the agent might need to insert the HTML boilerplate.
@@ -249,7 +239,7 @@ publishEvent("ContentPublished", {content_id: content_id, url: generate_public_u
   - Possibly mark in DB that content is published so one could filter drafts vs published.
   - We'll not delete in Phase 1 to keep every step traceable. Also if publish fails half way, leaving draft is fine; if we deleted then failed uploading, we'd have lost content.
 - **Notifications**: Maybe future enhancement to notify content team or Slack, but not in Phase 1.
-## 6.3 Configuration Parameters
+## 5.3 Configuration Parameters
 - **PUBLIC_BUCKET_NAME**: Name of the S3 bucket (or bucket + path) where published content goes. Provided via environment (so that dev and prod can use different buckets). e.g. va-phase1-site-bucket.
 - **SITE_BASE_URL**: If we want to include full URL in events or logs, we might configure the site’s domain or base URL (e.g., https://www.virtualagentics.com/). Not strictly needed for functionality, but good for constructing the content URL in event notifications or logs.
 - **CLOUDFRONT_DISTRIBUTION_ID**: If using CloudFront, the distribution ID for invalidations could be configured. If not set, means we skip invalidation.
@@ -259,7 +249,7 @@ publishEvent("ContentPublished", {content_id: content_id, url: generate_public_u
 - **FILE_NAME_FORMAT**: Perhaps a format string or choice (like use_slug = true or pattern such as posts/{slug}.html). But we can encode that logic in code for now. Not likely to be externally configured in Phase 1 beyond the bucket name and maybe a subfolder name ("posts"). We could have an env var for subdirectory if wanted.
 - **MAX_RETRIES**: for any retry logic (like 3 by default). Could be constant.
 - **DELETE_DRAFT_AFTER_PUBLISH**: boolean flag. If true, after successful publish, the agent would delete the draft file. If false, leave it. Default false for safety in Phase 1. But configurable if we later decide to clear drafts to save space.
-## 6.4 Resource Utilization Expectations
+## 5.4 Resource Utilization Expectations
 - **CPU**: The most CPU-intensive step might be the markdown to HTML conversion, which is not heavy for documents of a few thousand words. That might take tens of milliseconds. All other tasks (AWS SDK calls) are I/O-bound, waiting on network. So CPU usage is low.
 - **Memory**: The content maybe up to a couple hundred KB (2k words ~ maybe 15k characters, which is tiny). Even if images or big content in future, not huge. The markdown library might use some memory to parse but trivial relative to 256MB.
 - Converting one article at a time with these sizes is fine.
@@ -274,7 +264,7 @@ publishEvent("ContentPublished", {content_id: content_id, url: generate_public_u
 - Even if concurrently doing 2, doesn't strain memory or CPU.
 - If concurrency scaled up with dozens, S3 and DB could handle it, though mass publishing isn't needed.
 - The allocated memory CPU share is fine; if we needed faster conversion maybe giving more CPU by upping memory could speed by some small fraction, but not needed.
-## 7. Lifecycle Management
+## 6. Lifecycle Management
 ```mermaid
 stateDiagram-v2
     [*] --> Deployed : Infrastructure applied
@@ -288,7 +278,7 @@ stateDiagram-v2
     Idle --> Decommissioned : Retirement triggered
     Decommissioned --> [*] : Resources removed
 ```
-## 7.1 Initialization / Startup
+## 6.1 Initialization / Startup
 - **AWS Clients Setup**: On cold start, the Lambda initializes clients for S3, DynamoDB, SNS, CloudFront (if needed). These can be reused for multiple events in same container. Ensure environment variables for bucket names, etc., are read and stored.
 - **HTML Template Loading**: If a separate template file is packaged (for HTML wrapper), the agent could load it into memory at startup (from local file or an environment string). Alternatively, define template string in code, so nothing to load. If we had more complex templates or external references (like fetch a header snippet from S3), could do it, but Phase 1 likely hardcoded minimal template.
 - **Secrets**: Not needed. All config are environment or code. If CloudFront uses standard AWS credentials from Lambda role, no secret needed beyond that.
@@ -297,7 +287,7 @@ stateDiagram-v2
 - No heavy computations to precompute.
 - If the system had a backlog of events at cold start, it will process them one by one anyway. There's no persistent state except environment config.
 - **VPC cold start**: If Lambda in VPC, cold start might be a bit slower establishing ENI for network. But once up, subsequent events quick. It's fine. Possibly needed if S3 endpoints in VPC or if we needed NAT for external. But not an issue to mention specifically.
-## 7.2 Runtime Behaviour Loop
+## 6.2 Runtime Behaviour Loop
 - The Publish agent, like others, is event-driven one-off. Each invocation processes a single ReviewCompleted event. There's no loop aside from that.
 - It does not poll or schedule; it strictly reacts to SNS triggers.
 - If multiple events come concurrently, AWS may spin multiple container instances up to concurrency limit. There's no internal queue, SNS ensures delivery attempts.
@@ -305,7 +295,7 @@ stateDiagram-v2
 - So runtime loop is basically:
   - Wait for event (implicitly by AWS).
   - Process event, exit.
-## 7.3 Error Handling & Recovery
+## 6.3 Error Handling & Recovery
 - **In-function errors**: The code catches errors and emits PublishFailure events instead of crashing:
   - If content not found or conversion fails, we handle and return gracefully (with an event).
   - If S3 upload fails, likewise handle (maybe try then fail event).
@@ -330,7 +320,7 @@ stateDiagram-v2
 - **Dead-letter queue**: If we have SNS DLQ, any event not processed after retries could be landed there. We might not rely on that if we plan to catch errors internally.
   - Could still configure one as last resort. For example, if our code itself crashed without error event, message could go to DLQ. The team could then inspect it and maybe manually publish the content or fix code and reprocess from DLQ.
   - Summation: The agent tries to always either succeed or explicitly signal failure via events, rather than leaving things hanging.
-## 7.4 State Transitions & Persistence
+## 6.4 State Transitions & Persistence
 - **State*: The Publish agent doesn’t maintain long-running state; it transitions the content's state from "reviewed" to "published". The actual record of state is in DynamoDB item status and in events logs.
 - The pipeline’s idea of content state:
   - Initially content in "draft" (generated, not yet reviewed).
@@ -343,7 +333,7 @@ stateDiagram-v2
   - The DynamoDB entry is updated to reflect final info (published timestamp, etc.), serving as a persistent log or record.
 - If a published content needed to be updated or removed, that would be outside Phase 1 (perhaps in future, an agent might unpublish or update on new info, but we have none in Phase 1).
 - The system doesn't maintain any per-content memory in the agent itself across runs – all is in external storage.
-## 7.5 Shutdown / Termination
+## 6.5 Shutdown / Termination
 - The Lambda will terminate after processing the event, releasing any ephemeral resources.
 - If partway through publishing an event the Lambda gets terminated (very unlikely unless it hit timeout or was killed by deployment), potential outcomes:
   - It may have uploaded content but not updated DB or not emitted event. In such a scenario, content is live but pipeline didn't finalize. A new event might eventually re-trigger or an alert might cause manual fix. But since our tasks are quick, normally it finishes well before timeout.
@@ -351,7 +341,7 @@ stateDiagram-v2
 - There's no special shutdown procedure needed.
 - If the service is decommissioned or paused, content might stack up at review stage. But Phase 1 likely means if Publish agent is down, content remains approved but not published until agent returns. Not huge issue for short downtime; for long downtime they'd notice nothing is hitting site and check logs.
 - Blue/green deploy doesn’t require draining anything since events not in flight can queue in SNS briefly until new version ready.
-## 7.6 Upgrade & Blue/Green Deployment Considerations
+## 6.6 Upgrade & Blue/Green Deployment Considerations
 - **Deployment**: New versions of the Publish agent can be deployed with minimal fuss:
   - While deploying, if an event arrives, it might be processed by either old version if still active or queued a second until new version is ready. Using Lambda aliases, one can cut over between versions.
   - If worried about double or missing, one could temporarily pause the SNS subscription (but not easily done gracefully). Usually, we trust AWS to handle it seamlessly.
@@ -365,8 +355,8 @@ stateDiagram-v2
 - Usually, any changes to output format is considered carefully to not break site or to update site accordingly.
 - Also if we changed event structure (like ContentPublished fields), it mainly affects any subscribers (maybe none in Phase 1).
 - Summarily, upgrade is straightforward as far as pipeline continuity, with attention to configuration consistency.
-## 8. Security & Compliance
-### 8.1 IAM Role and Least-Privilege Policy Summary
+## 7. Security & Compliance
+### 7.1 IAM Role and Least-Privilege Policy Summary
 The Publish Lambda’s IAM role should allow:
 - **S3 Access**:
   - s3:GetObject for the drafts bucket va-phase1-content-objects (specifically the /drafts/* prefix) to read content.
@@ -394,14 +384,14 @@ The Publish Lambda’s IAM role should allow:
 - **Other compliance**:
   - If bucket encryption is required, the objects should be encrypted by default (S3 default encryption). Our agent just puts objects, which S3 will encrypt because bucket policy says so, or we could specifically add encryption param (but not needed if bucket default).
   - The agent's role doesn’t need access to content beyond what's needed to publish.
-## 8.2 Secrets Management
+## 7.2 Secrets Management
 - There are no direct secrets used by the Publish agent in Phase 1.
 - The CloudFront invalidation uses IAM auth of the role, no secret keys required (using AWS SDK).
 - If an external CMS API were used, that would require an API key/secret, likely from Secrets Manager. But since using AWS S3, none needed.
 - The site URL or config are not secrets.
 - Ensure not to embed any credentials in code. All is via role policies.
  Possibly consider the domain name of the site as not sensitive, just config.
-## 8.3 Data Classification & Encryption
+## 7.3 Data Classification & Encryption
 - **Content Data**: The published content is intended for public consumption, so it's not sensitive at all. However, until it's published, it might be considered internal. But once published, it's public. The Publish agent deals with content that is now approved to be public, so there's no confidentiality requirement on it.
 - However, all data transfer still occurs over AWS secure channels:
   - S3 access is within AWS network (or TLS if going over internet endpoints).
@@ -416,7 +406,7 @@ The Publish Lambda’s IAM role should allow:
 - **Compliance with deletion requests**: Not relevant for content. If content needed to be removed (maybe due to policy or user request), Phase 1 hasn't covered that. But since content is not personal data, no immediate compliance concern (like GDPR right to be forgotten). It's marketing content the company itself created.
 - **Audit and logs**: CloudTrail logs all S3 and DynamoDB operations by this agent’s role. So if needed, we can audit who published what when. Also, the DynamoDB item has a timestamp which helps.
 - **No PII**: It's possible an article might incidentally mention names or something, but as marketing content, there's no expectation of personal user data being processed by this agent. So privacy compliance is not directly applicable here.
-## 8.4 Audit Logging Requirements
+## 7.4 Audit Logging Requirements
 - The Publish agent logs significant actions:
   - It should log that it received a content for publishing (with content_id and maybe slug) – an INFO log.
   - It logs success of each major step: e.g. "Converted markdown to HTML for content X" (maybe DEBUG or not needed if always succeed).
@@ -437,8 +427,8 @@ Perhaps maintain a metric or log for content count published for trending (for a
   - No credentials.
   - They might contain partial content or snippet in error messages if conversion failed at a certain line, but that content is intended public anyway.
 - So no log scrubbing needed beyond normal.
-## 9. Observability
-### 9.1 Logging
+## 8. Observability
+### 8.1 Logging
 Logging strategy:
 - **Structured Logging**: Use a structured format (JSON or key-value) for important events. Eg:
   - INFO {"action":"StartPublish","content_id":"1234-uuid","slug":"ai-in-finance-how-it-works"}
@@ -458,7 +448,7 @@ Logging strategy:
 - Also ensure the error logs include enough detail to diagnose (like exception message, maybe truncated stacktrace if needed).
 - For example, if markdown conversion fails, output the exception text which might say what line or char caused error.
 - Logging environment config at startup can also be helpful: "Using bucket A and bucket B, distribution D". This appears in logs once per cold start typically and helps troubleshooting config issues.
-## 9.2 Metrics
+## 8.2 Metrics
 Key metrics for the Publish agent:
 - **Publish.SuccessCount** – increment for each content published successfully (i.e., ContentPublished event sent). Allows tracking volume of published content over time.
 - **Publish.FailureCount** – increment for each publishing failure (PublishFailure event). Ideally zero; if >0 triggers alerts (see below).
@@ -473,7 +463,7 @@ Key metrics for the Publish agent:
   - after failure, Publish.FailureCount +=1.
   - measure time from start to finish (with Python time) to record latency.
 - The success count should ideally equal the number of ContentReady (assuming everything eventually publishes). If there's discrepancy (failures or still pending), one can investigate.
-## 9.3 Distributed Tracing
+## 8.3 Distributed Tracing
 - If X-Ray is enabled, the Publish agent would trace:
   - The S3 get call, S3 put call, DynamoDB update, CloudFront invalidation as subsegments.
   - It can also include a segment for markdown conversion (as a custom subsegment or just as part of the main).
@@ -486,7 +476,7 @@ Key metrics for the Publish agent:
 - Possibly enable in dev environment if not needed in prod due to cost. But could enable sampling in prod as well because traffic is low.
 - For now, keep as optional. (Our logs and metrics likely suffice given the simplicity).
 - If an end-to-end view is desired: one could manually correlate by content_id across X-Ray traces of different agents (not trivial). Might not be worth it. Instead a pipeline sequence diagram or event log is easier.
-## 9.4 Alert Thresholds & Destinations
+## 8.4 Alert Thresholds & Destinations
 - **Publish Failure Alert**: If Publish.FailureCount > 0 in a given time window (or specifically if any failure event occurs), trigger an immediate alert (since any publish failure means content didn't go out as expected).
   - Could be PagerDuty/severity-high if content pipeline is critical (especially if it's for external customers). For internal content, maybe email/Slack to team suffices. But presumably, publishing content is a key deliverable, so treat failures seriously.
   - In practice, we'd set CloudWatch Alarm on the metric or configure SNS on error events. Perhaps simpler: the error events on /content/errors can be forwarded to an alerting SNS -> email. Because presumably all errors from all agents are important. But to not flood, maybe separate by agent; but since any error is abnormal anyway, central monitoring could catch it and escalate.
@@ -501,8 +491,8 @@ Key metrics for the Publish agent:
 - **Alert destination**: Typically an operations channel (like Slack #ops or an email to devops on-call). Possibly the content team as well if a content fails, since they might need to know it didn't go out. But likely first dev team fixes it or manually publishes then informs content team.
 - If using a centralized monitoring system, we integrate these CloudWatch alarms into it. For now, assume a CloudWatch Alarm with SNS to on-call email for simplicity.
 - Also likely to share error event info (like which content, reason) in the alert so they know what to do.
-10. Performance & Scaling
-### 10.1 Expected Workload Profile
+9. Performance & Scaling
+### 9.1 Expected Workload Profile
 - Matches review and generation: ~10–50 publish events/day in Phase 1, possibly one at a time.
 - Typically content pipeline is not heavy load; a few pieces per day or week. So Publish agent usage is low. Possibly the quietest agent in terms of run frequency (if content generation is weekly or daily).
 - **Burst**: Might rarely have bursts. If, say, the CMO agent queued 5 articles to be generated in quick succession (like a batch for a product launch), then contentgen might generate them one after another, reviews them quickly, publish might get 5 tasks in a short time.
@@ -512,7 +502,7 @@ Key metrics for the Publish agent:
 - The tasks are I/O-bound mostly; sequential processing of 10 items might take ~10 seconds total, not an issue. Concurrency is more for pipeline speed or if strictly needed to meet a publishing time window.
 - **Throughput**: Could easily handle well above Phase 1 demands (hundreds per hour) if needed by scaling concurrency or just sequentially since even sequential can do ~60 per minute easily.
 - So the agent is not a bottleneck.
-### 10.2 Latency & Throughput Targets
+### 9.2 Latency & Throughput Targets
 - **Latency*: each publish should complete in < 5 seconds. Our target is ~1 second average.
   - If CloudFront invalidation is invoked synchronously (the API returns quickly but the invalidation propagation is async, so we don't wait for it to actually expire content, just accept request), so that doesn't add much.
   - If a heavy template or extremely large content, maybe up to 2-3s but still way below 30s limit.
@@ -523,7 +513,7 @@ Key metrics for the Publish agent:
 - No formal throughput requirement beyond "should not be slower than content generation pipeline".
 - The site likely doesn't want dozens of posts per minute anyway from a business standpoint.
 - **Scalability**: If needed, raising Lambda concurrency or even converting to some other architecture (like an asynchronous pipeline or direct integration to CMS) could be done. But not needed at our scale.
-### 10.3 Auto-scaling Triggers and Limits
+### 9.3 Auto-scaling Triggers and Limits
 - The Lambda scales automatically up to concurrency=2 reserved. If more events come simultaneously (exceeding 2), the third will wait until one finishes (SNS will hold it or attempt concurrently above limit and get throttled).
 - If a scenario arises where, say, content generation pipeline was massively scaled and 10 review events come at once often, we would up the concurrency to 10. But likely unnecessary in Phase 1.
 - Memory (256MB) is plenty per function even if content size grows. If in future content included images or attached files, or much larger text, memory usage might need a bump for conversion overhead. Right now, text is small.
@@ -531,8 +521,8 @@ Key metrics for the Publish agent:
 - At current, one piece might be < 100KB, no throughput issues.
 - Watch out for any potential CloudFront API rate limits if called in bulk (like distribution invalidation has limits, often ~ invalidation requests per minute). If we somehow published hundreds of items at once, better to batch them into one invalidation. But Phase 1 won't hit CF rate limits (maybe 2-3 invalidations a day).
 - So no special scaling triggers needed beyond what Lambda and AWS handle by default.
-11. Testing Strategy
-### 11.1 Unit Tests
+10. Testing Strategy
+### 10.1 Unit Tests
 - **Markdown Conversion**: Provide a sample markdown string and run the conversion function. Verify that the output contains expected HTML tags. E.g., "# Title" becomes <h1>Title</h1>. Use a lightweight markdown library in tests or a stub if the actual library is heavy (but likely just use the same library to ensure parity). Also test edge cases: empty content (should produce maybe empty HTML body), content with special characters (make sure not broken), etc.
  **Slug Generation**: Test the slugify function with various inputs:
   - Normal phrase -> lower-hyphen,
@@ -570,7 +560,7 @@ Key metrics for the Publish agent:
 - Also test the idempotence: If the code is called twice with same content, ideally it should do same steps. Hard to check idempotence in unit, but we can ensure that if something already exists (the put returns success even if overriding an existing file, which is fine in S3 semantics).
 - If we had an optional deletion of draft (we decided not to do in Phase 1), but if did, test that we call DeleteObject at end and handle if fails (but since we skip, no test needed).
 - Memory or performance cannot be directly unit tested, but we can at least ensure our code isn't doing obviously inefficient things (like reading the entire S3 file repeatedly or building giant strings in loops unnecessarily; but given small scope, not an issue).
-### 11.2 Integration Tests
+### 10.2 Integration Tests
 - **Dev environment end-to-end test*:
   - Trigger a full pipeline in a dev environment (or using localstack to simulate S3 and Dynamo):
     - Put a known markdown file in the draft bucket and simulate a ReviewCompleted event (maybe via SNS or call Lambda handler directly). 
@@ -613,7 +603,7 @@ Key metrics for the Publish agent:
   - Possibly write a small script that after publish agent finishes (subscribe to ContentPublished events in dev), it fetches the public URL (if accessible publicly even in dev) to ensure it returns expected content (HTTP 200 and contains known string).
   - That would truly confirm end-user perspective.
   - For dev, if no domain, can access S3 website endpoint if configured. If not configured, skip this test.
-### 11.3 Contract Tests
+### 10.3 Contract Tests
 - **ContentReviewed to Publish contract**: Ensure the event fields the Publish agent expects from Review agent are present and correctly named. If using content-reviewed-v1.json, validate a sample ReviewCompleted event (maybe from actual Review test or documentation) against our code:
   - E.g., the code expects content_id key. Confirm schema says content_id. If it was contentId and we mis-match, that's a contract error to catch.
   - If slug or topic is part of event (maybe we decide to include topic in ReviewCompleted event), verify our code can handle if it's there or not.
@@ -629,7 +619,7 @@ Key metrics for the Publish agent:
 - **DynamoDB content record contract**: If other parts of system (like CFO or analytics) read the DynamoDB records, ensure we fill the fields they expect. For instance, if an analytics script expects status to eventually become 'published' and an url field present, we do that.
   - If published_at is expected to be in certain format (ISO8601?), ensure we store in correct format (maybe as an ISO string or epoch). Possibly the architecture doc might have guidance. If not, we just pick a sensible format (ISO string or epoch as Number).
   - Later if a reporting tool reads it, they'd adapt anyway. So minor contract to consider.
-### 11.4 Load/Stress Tests
+### 10.4 Load/Stress Tests
 - **High Volume Simulation**: Though Phase 1 won't encounter it, we could test the publish agent with a larger number of events to ensure no resources leak or any possible throttling:
   - For example, write a script to invoke the Lambda function 20 times sequentially with different content ids and small markdown to simulate backlog.
   - Monitor memory usage or time. Likely fine, but ensures no cumulative slowdown.
@@ -647,8 +637,8 @@ Key metrics for the Publish agent:
   - Lambdas typically don't leak memory across invocations drastically (and even if they did, container resets occasionally).
   - Could simulate by invoking same function 100 times with small content and see if any slowdown (timing each) or if memory usage creeps up (difficult to measure precisely without X-Ray memory info).
   - Likely fine due to short stateless operations.
-12. Operational Runbooks
-### 12.1 Standard Deployment Steps
+11. Operational Runbooks
+### 11.1 Standard Deployment Steps
 - **Deployment is orchestrated by CI/CD**:
   - Developer merges code changes for the Publish agent. This triggers the pipeline to run tests (including new/modified tests for publishing).
   - If tests pass, CI builds the Lambda package (zips code and dependencies).
@@ -676,7 +666,7 @@ Key metrics for the Publish agent:
 - For Blue/Green:
   - Possibly test new code on a sample by temporarily pointing dev topic to new function or running it manually. But since it's not user facing until it publishes content, it's simpler to just deploy and watch carefully as above.
 - Also consider that in case of not fully automated pipeline, sometimes content team might hold content requests during a deployment to avoid overlap. But pipeline small enough, probably not needed.
-### 12.2 Rollback Procedure
+### 11.2 Rollback Procedure
 - **Immediate rollback via Lambda alias**: If the new publish agent is failing to publish content or otherwise malfunctioning, revert to previous version:
   - In AWS Lambda console or via CLI, point the alias (which SNS uses) back to the last version. This takes effect immediately for new events.
   - This assumes the previous code was left as a version (which is typical).
@@ -711,7 +701,7 @@ Key metrics for the Publish agent:
   - But if the new code erroneously updated DB incorrectly (like cleared fields), rollback code should fix going forward but might need to manually correct those DB entries if critical.
   - Typically, the DB just might have 'reviewed' status but not 'published' if fail. After fix, republish will update to published.
 - Keep the older stable package handy if needed to redeploy directly in emergency. If CI can deploy a specific version by commit or artifact, know that process.
-### 12.3 Common Incident Diagnostics
+### 11.3 Common Incident Diagnostics
 - **Content Not Appearing on Site**:
   - Check if a ReviewCompleted event for that content was processed by Publish:
     - Look at CloudWatch Logs for the Publish Lambda around the time. Is there an entry for that content_id? If yes, see if it shows success or error.
@@ -794,7 +784,7 @@ Key metrics for the Publish agent:
     - Or manually edit in S3 (quick fix for a typo).
     - Communicate that Phase 1 doesn't handle iterative editing; likely they'd handle small edits manually by direct S3 edit or by pulling content back through pipeline (not trivial).
     - Make note to consider an "update content" flow in future enhancements, possibly as part of Review agent or a separate iteration agent.
-### 12.4 Known Limitations
+### 11.4 Known Limitations
 - **No Multi-Channel**-: The Publish agent currently only puts content to the web static bucket. It doesn’t propagate content to other channels (e.g., email newsletters, social media). So, if marketing wants content on multiple platforms, Phase 1 doesn’t cover it. This would be a future extension.
 - **No Rollback of Published Content**: Once content is published, the pipeline doesn’t have an automatic way to unpublish or rollback if an issue is found post-publish. The content would have to be manually removed from the site if necessary. This is noted as a limitation; future phases or a manual procedure covers it.
 - **Simplistic SEO/Metadata**: The current publishing doesn’t add meta tags (like description, keywords, Open Graph tags) or structured data to the HTML. It’s basically raw article HTML. That might be fine for an initial blog, but for advanced SEO, additional metadata might be needed. This is a limitation in quality of publishing.
