@@ -27,17 +27,21 @@ Belongs to the IT/Publishing or Web Operations domain – effectively acting as 
 Works after the Review agent: it subscribes to approved content events and handles final publishing steps. It is the last agent in the Phase 1 content pipeline, outputting content to the live site or repository.
 Supports the autonomous pipeline by removing the need for manual content uploading or formatting. It ensures content moves from internal storage to customer-facing channels seamlessly.
 ## 2.3 Scope & Assumptions
-In scope:
-Receiving notification of approved content and fetching that content for publishing.
-Converting content from markdown (or draft format) into the format needed for the website (e.g., HTML).
-Uploading the final content to the production content store (which might be an S3 website bucket or a CMS via API).
-Basic post-publish actions like clearing caches or updating indexes if required (Phase 1 minimal here).
-Emitting an event or log that content was published for record-keeping.
-Out of scope:
-Content scheduling or deciding when to publish (assumed immediate upon approval in Phase 1).
-Multi-channel distribution (e.g., not posting on social media or email – just the website).
-Complex HTML templating or site generation (Phase 1 assumes a simple static publish or that the markdown conversion suffices with minimal templating).
-Manual editorial adjustments (the content is published as given; no agent tweaks content at this stage beyond format conversion).
+
+**In scope:**
+- Receiving notification of approved content and fetching that content for publishing.
+- Converting content from markdown (or draft format) into the format needed for the website (e.g., HTML).
+- Uploading the final content to the production content store (which might be an S3 website bucket or a CMS via API).
+- Basic post-publish actions like clearing caches or updating indexes if required (Phase 1 minimal here).
+- Emitting an event or log that content was published for record-keeping.
+
+**Out of scope:**
+- Content scheduling or deciding when to publish (assumed immediate upon approval in Phase 1).
+- Multi-channel distribution (e.g., not posting on social media or email – just the website).
+- Complex HTML templating or site generation (Phase 1 assumes a simple static publish or that the markdown conversion suffices with minimal templating).
+- Manual editorial adjustments (the content is published as given; no agent tweaks content at this stage beyond format conversion).
+
+
 ## 2.4 Dependencies
 Upstream: Subscribes to ReviewCompleted events (or equivalent) from the Review agent, which indicate content that is ready to be published. Without an approval event, the Publish agent does nothing.
 Downstream: In terms of events, it may emit a ContentPublished event as a final signal (for analytics or acknowledgments). Also, the content is placed in a live content store (S3 bucket for website, etc.), making it accessible to end users. That content store could be considered a dependency too if there's a CDN or website reading from it.
