@@ -5,9 +5,8 @@ audience: "Internal – AI Engineering, DevOps, Phase 1 Agent Developers"
 authors: "VirtualAgentics AI Engineering Team"
 version: "0.2"
 date: "2025-06-11"
-gpt_model: "Formatted from Word by GPT-4o"
+gpt_model: "Reformatted by GPT-4o"
 ---
-
 
 # Publish Agent Design Specification
 
@@ -75,7 +74,7 @@ Services: CloudFront CDN if it caches the site (would need an invalidation, perh
 
 3.1 High-Level Context Diagram
 
-(Diagram to be inserted.) The Publish agent is implemented as an AWS Lambda triggered by an SNS topic for reviewed content (approval events). It retrieves the content (by content_id) from the internal content store (the same S3 bucket used for drafts, or maybe a separate staging area), then processes and transfers it to a public location (for instance, moving the file to a "published" prefix or different bucket accessible by the website). If needed, it converts markdown to HTML. The agent then signals completion. It interacts with AWS services like S3 and possibly DynamoDB (to update content status). There is no direct user interaction; the published content is consumed by web users via the website (which could be backed by that S3 or CMS).
+(Diagram to be inserted.) The Publish agent is implemented as an AWS Lambda triggered by an SNS topic for reviewed content (approval events). It retrieves the content (by content\_id) from the internal content store (the same S3 bucket used for drafts, or maybe a separate staging area), then processes and transfers it to a public location (for instance, moving the file to a "published" prefix or different bucket accessible by the website). If needed, it converts markdown to HTML. The agent then signals completion. It interacts with AWS services like S3 and possibly DynamoDB (to update content status). There is no direct user interaction; the published content is consumed by web users via the website (which could be backed by that S3 or CMS).
 
 3.2 Deployment Target
 
@@ -101,13 +100,13 @@ Resource Usage: Minimal CPU for format conversion, some network I/O to S3. No he
 
 4.1.1 Subscribed Events
 
-The Publish agent listens for ReviewCompleted events indicating content that passed review. The event includes the content_id and possibly some metadata like status or URL stub. This is the trigger for the publish process.
+The Publish agent listens for ReviewCompleted events indicating content that passed review. The event includes the content\_id and possibly some metadata like status or URL stub. This is the trigger for the publish process.
 
 (If naming differs, e.g., ContentApproved, the subscription would adjust accordingly. Here we use ReviewCompleted as per context.)
 
 4.1.2 Published Events
 
-ContentPublished: Emitted when an article has been successfully published. It serves as a final confirmation in the pipeline. In Phase 1, there may not be an active consumer of this event (other than logging or maybe triggering a simple counter). But it can be used by future analytics or to signal the CMO agent that the content is live. It typically carries the content_id and possibly the public URL or location of the content.
+ContentPublished: Emitted when an article has been successfully published. It serves as a final confirmation in the pipeline. In Phase 1, there may not be an active consumer of this event (other than logging or maybe triggering a simple counter). But it can be used by future analytics or to signal the CMO agent that the content is live. It typically carries the content\_id and possibly the public URL or location of the content.
 
 If any failure occurs during publishing, the agent would instead publish an error event (see Error Outputs) rather than a ContentPublished.
 
@@ -129,7 +128,7 @@ S3:
 
 Source Bucket: va-phase1-content-objects (the drafts bucket).
 
-Access: GetObject to retrieve the draft content (if not already included in event, which it likely isn't to avoid size issues). Specifically reads from /drafts/{content_id}.md or the reviewed location (if Review agent saved an edited version in same place).
+Access: GetObject to retrieve the draft content (if not already included in event, which it likely isn't to avoid size issues). Specifically reads from /drafts/{content\_id}.md or the reviewed location (if Review agent saved an edited version in same place).
 
 Destination Bucket: va-phase1-public-content (for example, a public website bucket or path). Possibly this is the same bucket with a different prefix, or a separate bucket. For static site, it could be the same bucket but moving from /drafts to /published.
 
@@ -159,33 +158,33 @@ Otherwise, no third-party services.
 
 Inputs come from the ReviewCompleted event and any referenced data:
 
-content_id: Key identifier for the content. The publish agent will use this to fetch the content from S3 (the draft/ready file) and to update records. If missing or not found, publishing cannot proceed.
+content\_id: Key identifier for the content. The publish agent will use this to fetch the content from S3 (the draft/ready file) and to update records. If missing or not found, publishing cannot proceed.
 
-content_topic: The title or topic of the content. Might be included in the event for reference. The agent might use it to create a user-friendly file name or URL if not otherwise provided (e.g., "AI-in-Finance-How-It-Works" slug). If not provided, we can derive from content or use content_id.
+content\_topic: The title or topic of the content. Might be included in the event for reference. The agent might use it to create a user-friendly file name or URL if not otherwise provided (e.g., "AI-in-Finance-How-It-Works" slug). If not provided, we can derive from content or use content\_id.
 
-slug/filename: In some architectures, the content's URL or filename might be predetermined (maybe the CMO or content generator decided a SEO slug). If the DynamoDB record has a field for slug, the publish agent should use that for naming the output file (like slug.html). If not, it might generate one from topic (like lowercase hyphenated topic). Needs validation to strip unsafe chars, etc. If still not available, fallback to content_id as file name (ensures uniqueness but not pretty).
+slug/filename: In some architectures, the content's URL or filename might be predetermined (maybe the CMO or content generator decided a SEO slug). If the DynamoDB record has a field for slug, the publish agent should use that for naming the output file (like slug.html). If not, it might generate one from topic (like lowercase hyphenated topic). Needs validation to strip unsafe chars, etc. If still not available, fallback to content\_id as file name (ensures uniqueness but not pretty).
 
 format: If the event indicated the content is already HTML or some other format, the agent would publish accordingly without converting. In Phase 1, we assume the content is Markdown that needs conversion to HTML. Could be an implicit assumption rather than explicit input. We'll treat it as known config: "convert markdown to HTML."
 
-approved_at: More for record, not needed to publish. Possibly used to set published date in some metadata (if generating HTML, might embed date). Could be drawn from event timestamp or record.
+approved\_at: More for record, not needed to publish. Possibly used to set published date in some metadata (if generating HTML, might embed date). Could be drawn from event timestamp or record.
 
-The agent validates that content_id exists and that it can retrieve the content file. If those fail, it's error output time.
+The agent validates that content\_id exists and that it can retrieve the content file. If those fail, it's error output time.
 
 5.2 Output Catalogue
 
 Outputs include the actual published content artifact and events/logs:
 
-published_content_file: The core output – the article in final form in the public site store. For example, after conversion, an HTML file is placed in the website bucket. Consumers of this are outside the agent world: it’s the website front-end (could be a static site served via S3 or CloudFront) or users downloading the content. The presence of this file is essentially the end goal.
+published\_content\_file: The core output – the article in final form in the public site store. For example, after conversion, an HTML file is placed in the website bucket. Consumers of this are outside the agent world: it’s the website front-end (could be a static site served via S3 or CloudFront) or users downloading the content. The presence of this file is essentially the end goal.
 
-content_status_update: The agent updates the content’s database record to reflect that it’s published (status = "published", published timestamp, and maybe the URL or path where it was published). This allows tracking and possibly the CMO agent to query how many have been published. It’s internal output used for reporting or future logic.
+content\_status\_update: The agent updates the content’s database record to reflect that it’s published (status = "published", published timestamp, and maybe the URL or path where it was published). This allows tracking and possibly the CMO agent to query how many have been published. It’s internal output used for reporting or future logic.
 
-ContentPublished event: A final event broadcast. It might contain content_id and possibly the public URL (like https://site.com/posts/slug). In Phase 1, no active agent might listen, but we include it for completeness and in case a monitoring tool or analytic event collector picks it up. It’s good for decoupling – e.g., a future Analytics agent could subscribe and log web analytics setup.
+ContentPublished event: A final event broadcast. It might contain content\_id and possibly the public URL (like https://site.com/posts/slug). In Phase 1, no active agent might listen, but we include it for completeness and in case a monitoring tool or analytic event collector picks it up. It’s good for decoupling – e.g., a future Analytics agent could subscribe and log web analytics setup.
 
 5.3 Error/Exception Outputs
 
 If publishing fails (e.g., can't upload, conversion error), the agent emits error events:
 
-PublishFailure: Covers any hard failure that means the content is not live. For example, inability to fetch the content file (should have been caught in review though, but if S3 had an outage), failure converting to HTML (maybe malformed markdown?), or S3 put failing due to permissions or network. The event will log the error and content_id so ops knows that content did not go live. Possibly, as there’s no automatic retry in Phase 1, someone might have to handle it manually.
+PublishFailure: Covers any hard failure that means the content is not live. For example, inability to fetch the content file (should have been caught in review though, but if S3 had an outage), failure converting to HTML (maybe malformed markdown?), or S3 put failing due to permissions or network. The event will log the error and content\_id so ops knows that content did not go live. Possibly, as there’s no automatic retry in Phase 1, someone might have to handle it manually.
 
 PublishPartial: In more complex pipelines, you might have a scenario where content is up but some ancillary step failed. In Phase 1, not likely needed. For instance, if content published but sending ContentPublished event failed (somehow), that’s minor since content is live. We won't complicate with partial, we'll just treat anything not fully done as failure.
 
@@ -197,17 +196,17 @@ All errors go to the common /content/errors topic. In Phase 1, an ops alarm wo
 
 On ReviewCompleted Event:
 
-Extract content_id (and slug if provided): From the event message, get the content identifier and any relevant metadata (title, etc.).
+Extract content\_id (and slug if provided): From the event message, get the content identifier and any relevant metadata (title, etc.).
 
-Fetch content from S3: Retrieve the markdown file for the given content_id from the drafts bucket. If not found or access denied, emit PublishFailure (with reason "content file missing"). (This scenario indicates a pipeline bug, as review should ensure content exists. It's an error path though.)
+Fetch content from S3: Retrieve the markdown file for the given content\_id from the drafts bucket. If not found or access denied, emit PublishFailure (with reason "content file missing"). (This scenario indicates a pipeline bug, as review should ensure content exists. It's an error path though.)
 
 Convert Markdown to HTML: Use a Markdown library (e.g., Python markdown or similar) to convert the markdown text into HTML. If conversion fails (e.g., due to some bad markdown or library error), log and emit PublishFailure (with details). Possibly could attempt a simpler fallback (but not necessary in Phase 1).
 
-Compose HTML page (if needed): Depending on how the site is structured, possibly wrap the generated HTML content in a basic HTML template (adding <html><body> tags if the markdown library didn’t do full HTML). If the content includes a title or meta, incorporate those. For Phase 1, possibly the markdown content already contains title as a heading which is fine. Minimal template might be applied or none if static site generator does it offline. We assume we may need to produce a standalone HTML snippet or full page.
+Compose HTML page (if needed): Depending on how the site is structured, possibly wrap the generated HTML content in a basic HTML template (adding  tags if the markdown library didn’t do full HTML). If the content includes a title or meta, incorporate those. For Phase 1, possibly the markdown content already contains title as a heading which is fine. Minimal template might be applied or none if static site generator does it offline. We assume we may need to produce a standalone HTML snippet or full page.
 
 Determine output path/filename: Decide where to put the file in the public bucket:
 
-If a slug or human-friendly filename is available, use it (e.g., my-title.html). Otherwise use content_id as filename ({uuid}.html). Possibly include date or keep simple. Ensure the extension is .html for static hosting.
+If a slug or human-friendly filename is available, use it (e.g., my-title.html). Otherwise use content\_id as filename ({uuid}.html). Possibly include date or keep simple. Ensure the extension is .html for static hosting.
 
 Determine S3 key like posts/{filename} or root if no subdir.
 
@@ -219,9 +218,9 @@ If the site has an index page or a listing of posts, Phase 1 might not auto-up
 
 If CloudFront is in front, create an invalidation for the newly uploaded content (and perhaps the index page if it exists). CloudFront invalidation ensures if there was a cache, it's refreshed. This is an AWS API call. If it fails, one might still consider content published (because eventual consistency might catch up). But better to attempt and if fail, log an alert (maybe our partial scenario, or just treat it as publish succeeded but with warning). For Phase 1, assume either no CDN or trivial to invalidate (we can do it and not consider it a publish failure unless critical). Possibly we skip if site is new enough that CloudFront always fetches new file.
 
-Update DynamoDB: Mark the content record as published. E.g., set status = "published", published_at = now, url = generated_url. If this update fails (rare), log error but don't necessarily call the whole publish a failure – the content is live, just the record not updated. We might attempt a retry on the DB update. If still failing, one could emit an error event as well because system state is inconsistent. But likely, treat it as minor and rely on event as source of truth that it was published. However, to be safe and consistent for pipeline, let's attempt and if it fails, we could include that info in the ContentPublished event (like "published but DB not updated"). But to keep it simple, we'll not fail the whole publish if DB update fails; we'll alert separately.
+Update DynamoDB: Mark the content record as published. E.g., set status = "published", published\_at = now, url = generated\_url. If this update fails (rare), log error but don't necessarily call the whole publish a failure – the content is live, just the record not updated. We might attempt a retry on the DB update. If still failing, one could emit an error event as well because system state is inconsistent. But likely, treat it as minor and rely on event as source of truth that it was published. However, to be safe and consistent for pipeline, let's attempt and if it fails, we could include that info in the ContentPublished event (like "published but DB not updated"). But to keep it simple, we'll not fail the whole publish if DB update fails; we'll alert separately.
 
-Emit ContentPublished event: If all above steps (especially the S3 upload) succeeded, publish a ContentPublished event with at least content_id and maybe the URL or key of the content. This event goes to SNS and can be picked up by any listeners (future analytics). If SNS publish fails for some reason, log it. The content is already up, so we won't roll back that; the failure to emit event might be acceptable (though it's part of pipeline, not critical to content presence but might affect any dependent processes). Possibly attempt a retry for event publish too.
+Emit ContentPublished event: If all above steps (especially the S3 upload) succeeded, publish a ContentPublished event with at least content\_id and maybe the URL or key of the content. This event goes to SNS and can be picked up by any listeners (future analytics). If SNS publish fails for some reason, log it. The content is already up, so we won't roll back that; the failure to emit event might be acceptable (though it's part of pipeline, not critical to content presence but might affect any dependent processes). Possibly attempt a retry for event publish too.
 
 On any error prior to final step: If an error happened (except DB update or final event emission which we treat as minor), we emit PublishFailure. That means content is not live (if error was fetch or conversion or upload). If some step partially succeeded (like file uploaded but then failure afterwards), we need to decide:
 
@@ -233,61 +232,63 @@ The agent should be idempotent-safe: If the event is redelivered or retried, upl
 
 Pseudocode outline:
 
-on event ReviewCompleted(content_id, maybe slug):
+on event ReviewCompleted(content\_id, maybe slug):
 
-content = S3.get_object(drafts_bucket, f"drafts/{content_id}.md")
+ content = S3.get\_object(drafts\_bucket, f"drafts/{content\_id}.md")
 
-if not content:
+ if not content:
 
-publishError("PublishFailure", reason="Draft not found")
+ publishError("PublishFailure", reason="Draft not found")
 
-return
+ return
 
-html = convert_markdown_to_html(content.text)
+ html = convert\_markdown\_to\_html(content.text)
 
-if conversion_failed:
+ if conversion\_failed:
 
-publishError("PublishFailure", reason="Markdown conversion failed: ...")
+ publishError("PublishFailure", reason="Markdown conversion failed: ...")
 
-return
+ return
 
-slug = event.slug or generate_slug(event.topic or content_id)
+ slug = event.slug or generate\_slug(event.topic or content\_id)
 
-out_key = f"posts/{slug}.html"
+ out\_key = f"posts/{slug}.html"
 
-success = S3.put_object(public_bucket, out_key, html, ContentType="text/html")
+ success = S3.put\_object(public\_bucket, out\_key, html, ContentType="text/html")
 
-if not success:
+ if not success:
 
-# Optionally retry internal times
+ # Optionally retry internal times
 
-publishError("PublishFailure", reason="Upload failed")
+ publishError("PublishFailure", reason="Upload failed")
 
-return
+ return
 
-# Optionally CloudFront invalidate out_key (and maybe '/index.html')
+ # Optionally CloudFront invalidate out\_key (and maybe '/index.html')
 
-try_invalidate(out_key)
+ try\_invalidate(out\_key)
 
-# Update content status in DB
+ # Update content status in DB
 
-try:
+ try:
 
-DynamoDB.update(content_table, Key=content_id, Set={'status':'published','published_at':now,'url':out_key})
+ DynamoDB.update(content\_table, Key=content\_id, Set={'status':'published','published\_at':now,'url':out\_key})
 
-except Exception as e:
+ except Exception as e:
 
-log("WARN: DynamoDB update failed", e)
+ log("WARN: DynamoDB update failed", e)
 
-# continue without failing publish
+ # continue without failing publish
 
-publishEvent("ContentPublished", {content_id: content_id, url: generate_public_url(out_key)})
+ publishEvent("ContentPublished", {content\_id: content\_id, url: generate\_public\_url(out\_key)})
 
 6.2 Key Algorithms or Data Processing
 
 Markdown to HTML Conversion: Using a library like markdown2 or python-markdown. Possibly with some extensions (like code formatting or tables if needed). The agent should ensure relative links or images in markdown still work. If images were included in content, likely ContentGen didn't handle images in Phase 1, so not an issue.
 
-Confirm that the output HTML is well-formed. If the markdown had a title (maybe first line # Title), the converter will produce <h1>Title</h1>. We might want to wrap content with <html><head><title>Title</title></head><body> ... content ... </body></html> if the static site expects full HTML pages. Possibly optional if static site uses something like Jekyll (but if we had Jekyll, we might not be doing conversion here, we’d just output markdown to a repo).
+Confirm that the output HTML is well-formed. If the markdown had a title (maybe first line # Title), the converter will produce # Title
+
+. We might want to wrap content with Title ... content ...  if the static site expects full HTML pages. Possibly optional if static site uses something like Jekyll (but if we had Jekyll, we might not be doing conversion here, we’d just output markdown to a repo).
 
 We'll assume for Phase 1, we want a self-contained HTML page per article (makes it directly publishable via S3 static hosting). So the agent might need to insert the HTML boilerplate.
 
@@ -295,11 +296,11 @@ For simplicity, we can either use a template string or use the markdown library'
 
 Slug Generation: If not provided, implement a simple slug function:
 
-Take content topic or title, lowercase it, replace spaces with hyphens, remove non-alphanumeric (keeping hyphens). E.g., "AI in Finance – How it Works?" -> "ai-in-finance-how-it-works". If that yields empty (if no topic given), fallback to using content_id (or part of it).
+Take content topic or title, lowercase it, replace spaces with hyphens, remove non-alphanumeric (keeping hyphens). E.g., "AI in Finance – How it Works?" -> "ai-in-finance-how-it-works". If that yields empty (if no topic given), fallback to using content\_id (or part of it).
 
-Ensure uniqueness: if using content_id, always unique. If using topic, two content could have same title. Possibly the CMO ensures topics are unique enough. In Phase 1, volume is low and they may all have distinct subjects, but collisions are possible (like "Monthly Report" repeating).
+Ensure uniqueness: if using content\_id, always unique. If using topic, two content could have same title. Possibly the CMO ensures topics are unique enough. In Phase 1, volume is low and they may all have distinct subjects, but collisions are possible (like "Monthly Report" repeating).
 
-Could append content_id or date if collision detection is needed. But for Phase 1, we might ignore that since content_id is always an option (or just always use content_id to avoid collisions, but then URLs are ugly).
+Could append content\_id or date if collision detection is needed. But for Phase 1, we might ignore that since content\_id is always an option (or just always use content\_id to avoid collisions, but then URLs are ugly).
 
 Possibly store slug in DB at request time to ensure uniqueness (like an index or something). Not done in Phase 1 likely.
 
@@ -311,7 +312,7 @@ If static hosting, sometimes you can just host the HTML fragment, but usually yo
 
 We'll incorporate a basic template:
 
-Possibly add a <title> in the head. We can use the content topic or if none, "Article".
+Possibly add a  in the head. We can use the content topic or if none, "Article".
 
 Basic styling not asked, likely minimal or external CSS maybe linked globally. Phase 1 might not concern style.
 
@@ -321,7 +322,7 @@ So agent just ensures content is a complete HTML page with its title embedded, p
 
 CloudFront Invalidation: If the site is behind CloudFront:
 
-Use AWS SDK for cloudfront: create_invalidation(DistributionId, Paths=[out_key]).
+Use AWS SDK for cloudfront: create\_invalidation(DistributionId, Paths=[out\_key]).
 
 This is asynchronous on CloudFront side (returns immediately with an Invalidation ID to check status). We probably don't wait for it to complete (which can take minutes) since the page will eventually propagate. No point delaying Lambda for it, we can fire-and-forget. The AWS API call itself is quick to start invalidation.
 
@@ -329,7 +330,7 @@ If CloudFront call fails (due to auth or network), we log and maybe send a warni
 
 Retry strategy: For critical steps like S3 upload:
 
-AWS SDK might handle some retries internally (the Python boto3 does for certain errors like throughput issues). We could incorporate a small manual retry loop for put_object if it fails (like try up to 3 times with short wait).
+AWS SDK might handle some retries internally (the Python boto3 does for certain errors like throughput issues). We could incorporate a small manual retry loop for put\_object if it fails (like try up to 3 times with short wait).
 
 Considering low volume, an immediate failure is likely a serious issue (like wrong permissions or bucket doesn't exist), so a retry likely won't fix that. But network blips maybe. We'll include maybe one immediate retry for safe measure.
 
@@ -351,23 +352,23 @@ Notifications: Maybe future enhancement to notify content team or Slack, but not
 
 6.3 Configuration Parameters
 
-PUBLIC_BUCKET_NAME: Name of the S3 bucket (or bucket + path) where published content goes. Provided via environment (so that dev and prod can use different buckets). e.g. va-phase1-site-bucket.
+PUBLIC\_BUCKET\_NAME: Name of the S3 bucket (or bucket + path) where published content goes. Provided via environment (so that dev and prod can use different buckets). e.g. va-phase1-site-bucket.
 
-SITE_BASE_URL: If we want to include full URL in events or logs, we might configure the site’s domain or base URL (e.g., https://www.virtualagentics.com/). Not strictly needed for functionality, but good for constructing the content URL in event notifications or logs.
+SITE\_BASE\_URL: If we want to include full URL in events or logs, we might configure the site’s domain or base URL (e.g., https://www.virtualagentics.com/). Not strictly needed for functionality, but good for constructing the content URL in event notifications or logs.
 
-CLOUDFRONT_DISTRIBUTION_ID: If using CloudFront, the distribution ID for invalidations could be configured. If not set, means we skip invalidation.
+CLOUDFRONT\_DISTRIBUTION\_ID: If using CloudFront, the distribution ID for invalidations could be configured. If not set, means we skip invalidation.
 
-HTML_TEMPLATE: Possibly store an HTML template string or file for wrapping content. Alternatively, smaller config:
+HTML\_TEMPLATE: Possibly store an HTML template string or file for wrapping content. Alternatively, smaller config:
 
-SITE_NAME or default title to put in <title> if no specific one.
+SITE\_NAME or default title to put in  if no specific one.
 
-STYLESHEET_URL if linking a CSS in head. Hardcoded or configured if needed. Phase 1 might have a simple inline style or none.
+STYLESHEET\_URL if linking a CSS in head. Hardcoded or configured if needed. Phase 1 might have a simple inline style or none.
 
-FILE_NAME_FORMAT: Perhaps a format string or choice (like use_slug = true or pattern such as posts/{slug}.html). But we can encode that logic in code for now. Not likely to be externally configured in Phase 1 beyond the bucket name and maybe a subfolder name ("posts"). We could have an env var for subdirectory if wanted.
+FILE\_NAME\_FORMAT: Perhaps a format string or choice (like use\_slug = true or pattern such as posts/{slug}.html). But we can encode that logic in code for now. Not likely to be externally configured in Phase 1 beyond the bucket name and maybe a subfolder name ("posts"). We could have an env var for subdirectory if wanted.
 
-MAX_RETRIES: for any retry logic (like 3 by default). Could be constant.
+MAX\_RETRIES: for any retry logic (like 3 by default). Could be constant.
 
-DELETE_DRAFT_AFTER_PUBLISH: boolean flag. If true, after successful publish, the agent would delete the draft file. If false, leave it. Default false for safety in Phase 1. But configurable if we later decide to clear drafts to save space.
+DELETE\_DRAFT\_AFTER\_PUBLISH: boolean flag. If true, after successful publish, the agent would delete the draft file. If false, leave it. Default false for safety in Phase 1. But configurable if we later decide to clear drafts to save space.
 
 6.4 Resource Utilization Expectations
 
@@ -547,7 +548,7 @@ If new version changes output logic significantly (like using a different bucket
 
 Because it’s last in pipeline, a faulty deployment could mean content isn't reaching site. The team should quickly catch that if no new content appears. We have alarms on PublishFailure events as well.
 
-Possibly maintain backward compatibility: If we changed the content format, the new agent might produce things differently. But since it's end of pipeline, backward compatibility matters only if, say, the site expects a certain format. We must coordinate with site. E.g., if we decided to not wrap HTML with <html> anymore, site might break if it expected full pages (if it's just serving that file raw).
+Possibly maintain backward compatibility: If we changed the content format, the new agent might produce things differently. But since it's end of pipeline, backward compatibility matters only if, say, the site expects a certain format. We must coordinate with site. E.g., if we decided to not wrap HTML with  anymore, site might break if it expected full pages (if it's just serving that file raw).
 
 Usually, any changes to output format is considered carefully to not break site or to update site accordingly.
 
@@ -591,7 +592,7 @@ cloudfront:CreateInvalidation on the specific distribution (Arn including distri
 
 Possibly also cloudfront:GetDistribution if needed (not really for invalidation, just create is enough).
 
-This is an AWS global service call outside VPC, so ensure no VPC blocking if any. The role needs permission at least for CreateInvalidation. It can be scoped to the distribution ID's resource ARN (like arn:aws:cloudfront::<account-id>:distribution/<distribution-id>).
+This is an AWS global service call outside VPC, so ensure no VPC blocking if any. The role needs permission at least for CreateInvalidation. It can be scoped to the distribution ID's resource ARN (like arn:aws:cloudfront:::distribution/).
 
 Logs: Standard logs:CreateLogStream, logs:PutLogEvents for CloudWatch.
 
@@ -661,7 +662,7 @@ No PII: It's possible an article might incidentally mention names or something, 
 
 The Publish agent logs significant actions:
 
-It should log that it received a content for publishing (with content_id and maybe slug) – an INFO log.
+It should log that it received a content for publishing (with content\_id and maybe slug) – an INFO log.
 
 It logs success of each major step: e.g. "Converted markdown to HTML for content X" (maybe DEBUG or not needed if always succeed).
 
@@ -673,7 +674,7 @@ If any step fails, log an ERROR with details (and also send event). The logs pro
 
 These logs form an audit trail in CloudWatch: one can see for each content when it got published and to where.
 
-Additionally, the DynamoDB update can serve as an audit record (published_at timestamp).
+Additionally, the DynamoDB update can serve as an audit record (published\_at timestamp).
 
 CloudTrail (for S3 and Dynamo) will show the API calls:
 
@@ -691,7 +692,7 @@ Perhaps maintain a metric or log for content count published for trending (for a
 
 Ensure logs do not contain sensitive info:
 
-They will contain content_id, slug, maybe the title. That’s fine (title is intended to be public anyway).
+They will contain content\_id, slug, maybe the title. That’s fine (title is intended to be public anyway).
 
 No credentials.
 
@@ -707,15 +708,15 @@ Logging strategy:
 
 Structured Logging: Use a structured format (JSON or key-value) for important events. Eg:
 
-INFO {"action":"StartPublish","content_id":"1234-uuid","slug":"ai-in-finance-how-it-works"}
+INFO {"action":"StartPublish","content\_id":"1234-uuid","slug":"ai-in-finance-how-it-works"}
 
-INFO {"action":"UploadSuccess","content_id":"1234-uuid","bucket":"va-phase1-site-content","key":"posts/ai-in-finance-how-it-works.html"}
+INFO {"action":"UploadSuccess","content\_id":"1234-uuid","bucket":"va-phase1-site-content","key":"posts/ai-in-finance-how-it-works.html"}
 
-INFO {"action":"Published","content_id":"1234-uuid","url":"https://.../ai-in-finance-how-it-works.html","status":"success"} or similarly at end.
+INFO {"action":"Published","content\_id":"1234-uuid","url":"https://.../ai-in-finance-how-it-works.html","status":"success"} or similarly at end.
 
-ERROR {"action":"PublishFailed","content_id":"1234-uuid","error":"Markdown conversion error: ..."}
+ERROR {"action":"PublishFailed","content\_id":"1234-uuid","error":"Markdown conversion error: ..."}
 
-Each log includes content_id to correlate logs to a piece of content.
+Each log includes content\_id to correlate logs to a piece of content.
 
 We ensure not to log entire content HTML (which is public anyway, but not needed in logs). Summaries like "converted content length X chars" could be logged if needed for debugging sizes.
 
@@ -795,7 +796,7 @@ Possibly enable in dev environment if not needed in prod due to cost. But could 
 
 For now, keep as optional. (Our logs and metrics likely suffice given the simplicity).
 
-If an end-to-end view is desired: one could manually correlate by content_id across X-Ray traces of different agents (not trivial). Might not be worth it. Instead a pipeline sequence diagram or event log is easier.
+If an end-to-end view is desired: one could manually correlate by content\_id across X-Ray traces of different agents (not trivial). Might not be worth it. Instead a pipeline sequence diagram or event log is easier.
 
 9.4 Alert Thresholds & Destinations
 
@@ -891,7 +892,9 @@ So no special scaling triggers needed beyond what Lambda and AWS handle by defau
 
 11.1 Unit Tests
 
-Markdown Conversion: Provide a sample markdown string and run the conversion function. Verify that the output contains expected HTML tags. E.g., "# Title" becomes <h1>Title</h1>. Use a lightweight markdown library in tests or a stub if the actual library is heavy (but likely just use the same library to ensure parity). Also test edge cases: empty content (should produce maybe empty HTML body), content with special characters (make sure not broken), etc.
+Markdown Conversion: Provide a sample markdown string and run the conversion function. Verify that the output contains expected HTML tags. E.g., "# Title" becomes # Title
+
+. Use a lightweight markdown library in tests or a stub if the actual library is heavy (but likely just use the same library to ensure parity). Also test edge cases: empty content (should produce maybe empty HTML body), content with special characters (make sure not broken), etc.
 
 Slug Generation: Test the slugify function with various inputs:
 
@@ -901,23 +904,23 @@ phrase with punctuation (ensures they are removed or replaced properly),
 
 phrase with non-ASCII (maybe remove or transliterate? depending on design; if out-of-scope, just remove them).
 
-No title scenario -> should default to content_id (maybe test that branch).
+No title scenario -> should default to content\_id (maybe test that branch).
 
 Colliding titles scenario (if our code would append ID or number, but currently we don't implement that; so might skip).
 
 S3 interactions (mocked):
 
-Simulate get_object returning a known markdown content (like "Hello world") as bytes. Ensure our code calls the right bucket/key and gets the data (with mocks, verify call arguments).
+Simulate get\_object returning a known markdown content (like "Hello world") as bytes. Ensure our code calls the right bucket/key and gets the data (with mocks, verify call arguments).
 
-Simulate put_object and verify it is called with the correct bucket, key (including slug logic), and that the content to put is the HTML from conversion. Possibly verify ContentType = text/html is set.
+Simulate put\_object and verify it is called with the correct bucket, key (including slug logic), and that the content to put is the HTML from conversion. Possibly verify ContentType = text/html is set.
 
-Simulate the scenario where get_object raises an exception or returns no data (like file not found) and ensure the function would catch that and plan to emit a PublishFailure (we might not directly test event emission here, but we can test that the function returns an indication of failure or calls the error publish mock).
+Simulate the scenario where get\_object raises an exception or returns no data (like file not found) and ensure the function would catch that and plan to emit a PublishFailure (we might not directly test event emission here, but we can test that the function returns an indication of failure or calls the error publish mock).
 
-Simulate put_object failing (throwing exception). Ensure we catch and mark failure.
+Simulate put\_object failing (throwing exception). Ensure we catch and mark failure.
 
 DynamoDB update (mock):
 
-Verify that we call UpdateItem with correct content_id key and update expression to set status to published and possibly URL/timestamp. If we supply a test timestamp in environment or freeze time, check that correct values are passed. If code uses a simplified client method, just check that function is called once if things go well.
+Verify that we call UpdateItem with correct content\_id key and update expression to set status to published and possibly URL/timestamp. If we supply a test timestamp in environment or freeze time, check that correct values are passed. If code uses a simplified client method, just check that function is called once if things go well.
 
 Simulate the update throwing an exception (like conditional check fail or throughput exceed). Ensure we log or handle it gracefully (the test might check that our function logs a warning or doesn't raise).
 
@@ -931,7 +934,7 @@ Simulate that invalidation call throws an exception (perhaps invalid distributio
 
 Full success flow:
 
-Simulate everything succeeding and ensure at end we attempt to publish the ContentPublished event. Use a mock for SNS publish. Check it was called with the right topic ARN and message that includes content_id and possibly URL.
+Simulate everything succeeding and ensure at end we attempt to publish the ContentPublished event. Use a mock for SNS publish. Check it was called with the right topic ARN and message that includes content\_id and possibly URL.
 
 Possibly verify the message structure matches our content-published-v1.json expectation (like fields present). But a unit test can only easily verify what we passed to SNS client publish if we have that accessible.
 
@@ -953,11 +956,11 @@ If event missing slug or topic, ensure our code still works (generates slug from
 
 If content is extremely trivial (like just "Hi"), does conversion and publish still do the right minimal output.
 
-If content has relative links or images, though Phase 1 no images, but maybe link [see](other-article), our agent wouldn't fix those references beyond converting to <a>. Not much to test unless we had logic for adjusting links (which we likely not do).
+If content has relative links or images, though Phase 1 no images, but maybe link [see](other-article), our agent wouldn't fix those references beyond converting to . Not much to test unless we had logic for adjusting links (which we likely not do).
 
 If content has HTML already inside (like ContentGen included some), our markdown converter might just pass it through or escape it depending on library. We should test that scenario to ensure we aren't double-escaping legitimate HTML. e.g., a code snippet or a script tag? But less likely. Maybe skip if not expecting it.
 
-These unit tests rely on mocking AWS services. Could use moto library for S3 and Dynamo to simulate (which actually stores in memory), or simpler approach: monkeypatch boto3 clients to stubs. Possibly simpler to create stub classes with expected interface (get_object, put_object, etc.) and inject them.
+These unit tests rely on mocking AWS services. Could use moto library for S3 and Dynamo to simulate (which actually stores in memory), or simpler approach: monkeypatch boto3 clients to stubs. Possibly simpler to create stub classes with expected interface (get\_object, put\_object, etc.) and inject them.
 
 Also test the idempotence: If the code is called twice with same content, ideally it should do same steps. Hard to check idempotence in unit, but we can ensure that if something already exists (the put returns success even if overriding an existing file, which is fine in S3 semantics).
 
@@ -1055,19 +1058,19 @@ For dev, if no domain, can access S3 website endpoint if configured. If not conf
 
 ContentReviewed to Publish contract: Ensure the event fields the Publish agent expects from Review agent are present and correctly named. If using content-reviewed-v1.json, validate a sample ReviewCompleted event (maybe from actual Review test or documentation) against our code:
 
-E.g., the code expects content_id key. Confirm schema says content_id. If it was contentId and we mis-match, that's a contract error to catch.
+E.g., the code expects content\_id key. Confirm schema says content\_id. If it was contentId and we mis-match, that's a contract error to catch.
 
 If slug or topic is part of event (maybe we decide to include topic in ReviewCompleted event), verify our code can handle if it's there or not.
 
 Published event schema: Validate that the ContentPublished event we send conforms to content-published-v1.json.
 
-For example, if schema expects content_id and url, ensure we include those and correct types (string).
+For example, if schema expects content\_id and url, ensure we include those and correct types (string).
 
 Possibly use a JSON schema validator in a test, constructing the event as our code would and validate it.
 
 System integration contract: Optionally, cross-verify that the CMO or any other part might listen to ContentPublished. Possibly the CMO agent might in future subscribe to ContentPublished to update some metrics (phase1 not really, but maybe).
 
-If so, ensure the event has whatever fields they'd need (like maybe content_id and topic to know what's published). If we think future uses, including topic or title in ContentPublished might be useful for analytics/humans. Not specified but could consider adding it. Not doing explicit contract test since no current consumer, but thinking ahead.
+If so, ensure the event has whatever fields they'd need (like maybe content\_id and topic to know what's published). If we think future uses, including topic or title in ContentPublished might be useful for analytics/humans. Not specified but could consider adding it. Not doing explicit contract test since no current consumer, but thinking ahead.
 
 Bucket/URL contract: If front-end expects content at a certain path or naming convention, verify we adhere to that. E.g., if the site front-end code expects all blog posts to be in /posts/ prefix and named by slug, ensure our slug logic meets their naming rules (no uppercase, no spaces, etc.).
 
@@ -1079,7 +1082,7 @@ Clarify such with team. For now assume simpler route where site lists just uses 
 
 DynamoDB content record contract: If other parts of system (like CFO or analytics) read the DynamoDB records, ensure we fill the fields they expect. For instance, if an analytics script expects status to eventually become 'published' and an url field present, we do that.
 
-If published_at is expected to be in certain format (ISO8601?), ensure we store in correct format (maybe as an ISO string or epoch). Possibly the architecture doc might have guidance. If not, we just pick a sensible format (ISO string or epoch as Number).
+If published\_at is expected to be in certain format (ISO8601?), ensure we store in correct format (maybe as an ISO string or epoch). Possibly the architecture doc might have guidance. If not, we just pick a sensible format (ISO string or epoch as Number).
 
 Later if a reporting tool reads it, they'd adapt anyway. So minor contract to consider.
 
@@ -1143,7 +1146,7 @@ Possibly run a quick test in dev environment first, then deploy to prod. If usin
 
 Pre-deployment checks:
 
-Ensure any new environment variables (like if we introduced PUBLIC_BUCKET etc. different from before) are set in Terraform to correct values for each environment.
+Ensure any new environment variables (like if we introduced PUBLIC\_BUCKET etc. different from before) are set in Terraform to correct values for each environment.
 
 If we changed IAM (like adding CloudFront perms), ensure those changes are included and applied. Mistakes in IAM can cause runtime errors.
 
@@ -1223,7 +1226,7 @@ Replay the ReviewCompleted events (e.g., manually re-send them from logs or have
 
 Or manually publish those few pieces that got stuck.
 
-Possibly the easiest in-phase1: if one piece failed, after fix or rollback, content team or dev can manually call the Publish Lambda (using test event with that content_id) to push it out.
+Possibly the easiest in-phase1: if one piece failed, after fix or rollback, content team or dev can manually call the Publish Lambda (using test event with that content\_id) to push it out.
 
 Or could trigger the review agent to re-send the event (but no built-in, so manual step).
 
@@ -1253,17 +1256,17 @@ Content Not Appearing on Site:
 
 Check if a ReviewCompleted event for that content was processed by Publish:
 
-Look at CloudWatch Logs for the Publish Lambda around the time. Is there an entry for that content_id? If yes, see if it shows success or error.
+Look at CloudWatch Logs for the Publish Lambda around the time. Is there an entry for that content\_id? If yes, see if it shows success or error.
 
 If no entry, maybe the event never triggered (subscribe issue or earlier pipeline broke). Possibly check SNS metrics or DLQ for unprocessed events.
 
 If logs show success, then likely the content is published but perhaps in a location not visible (maybe wrong bucket or slug).
 
-Check the S3 bucket manually to see if the file exists (looking for content_id or slug). Maybe a slug mis-generation (like slug is empty so file named ".html" or something).
+Check the S3 bucket manually to see if the file exists (looking for content\_id or slug). Maybe a slug mis-generation (like slug is empty so file named ".html" or something).
 
 If file is present, maybe the site (CloudFront or DNS) isn't pointing to correct place. Check if the site expecting files in a certain prefix. Possibly path mismatch.
 
-If file not present in bucket but logs claimed success, maybe there was a silent error or a race condition. Unlikely, but maybe Dynamo update succeeded but file upload didn't actually happen? Check CloudTrail for PutObject event for that content_id to confirm.
+If file not present in bucket but logs claimed success, maybe there was a silent error or a race condition. Unlikely, but maybe Dynamo update succeeded but file upload didn't actually happen? Check CloudTrail for PutObject event for that content\_id to confirm.
 
 If logs show an error:
 
@@ -1313,7 +1316,7 @@ e.g., content is published but appears without proper formatting (maybe missing 
 
 Possibly our template logic might be wrong, or we forgot to link CSS.
 
-If it's our oversight, we might need to update the publish agent to include whatever is missing (like adding a <head> section linking a stylesheet).
+If it's our oversight, we might need to update the publish agent to include whatever is missing (like adding a  section linking a stylesheet).
 
 As immediate fix, we could manually edit the published file to insert needed parts (since it's static).
 
@@ -1363,7 +1366,7 @@ Possibly we put it under a prefix that isn't allowed. Eg: policy allows /posts/*
 
 If using the same bucket as draft but that is private by default, we may have expected the final output in a separate bucket configured for public. If we accidentally uploaded to the private bucket's another prefix, it won't be accessible.
 
-Check if PUBLIC_BUCKET_NAME was correct. Could be we left it as the same content bucket which might not be web-accessible.
+Check if PUBLIC\_BUCKET\_NAME was correct. Could be we left it as the same content bucket which might not be web-accessible.
 
 Fix by ensuring it's in the site bucket. Possibly a config error in env.
 
@@ -1377,7 +1380,7 @@ Then re-upload (or set ACL on existing object if needing quick fix).
 
 Going forward, adjust agent or config:
 
-If needed, agent can call put_object(..., ACL='public-read'). But if we have correct policy we shouldn't have to.
+If needed, agent can call put\_object(..., ACL='public-read'). But if we have correct policy we shouldn't have to.
 
 Check AWS account security settings: some accounts by default block public ACLs, then must rely on bucket policy.
 
@@ -1447,7 +1450,7 @@ Multi-Channel Publishing: Extend the agent (or add new ones) to publish content 
 
 CMS Integration: Instead of (or in addition to) static S3, Phase 2 might integrate with a content management system (like WordPress or Contentful). The agent would then call CMS APIs to create the post, including metadata (author, categories, etc.). This likely means significant changes: use of a different external API and handling authentication (would involve secret management, mapping fields). The Phase 1 design keeps things simple with static publishing, but CMS integration is a logical next step for more robust content management.
 
-Scheduled Publishing: Introduce the ability to hold content and publish at a scheduled future time. This could involve modifying the CMO or Publish agent logic: e.g., if content has a "publish_date" in the request, the Publish agent could schedule itself via a delayed trigger (maybe putting the event in a delay queue or using EventBridge to invoke at that time). Alternatively, hold content in DB until time and then trigger publish. Phase 2 could incorporate that for planned campaigns.
+Scheduled Publishing: Introduce the ability to hold content and publish at a scheduled future time. This could involve modifying the CMO or Publish agent logic: e.g., if content has a "publish\_date" in the request, the Publish agent could schedule itself via a delayed trigger (maybe putting the event in a delay queue or using EventBridge to invoke at that time). Alternatively, hold content in DB until time and then trigger publish. Phase 2 could incorporate that for planned campaigns.
 
 Site Index and Notifications: Enhance publishing to also update an index page or RSS feed, and notify subscribers:
 
@@ -1457,7 +1460,7 @@ Update a "recent posts" section on the homepage (if not dynamic, perhaps by rege
 
 Also, send an email or Slack notification internally that "Article X has been published". Possibly tie into an email marketing system for external newsletter.
 
-Better SEO/Metadata: Phase 2 might have the pipeline incorporate meta description, keywords, etc. Perhaps the CMO agent could generate meta description and pass it through, and the Publish agent would embed it in the HTML <head>. Also support for Open Graph tags for social media (title, description, image). This requires storing those in DB or events and updating templates.
+Better SEO/Metadata: Phase 2 might have the pipeline incorporate meta description, keywords, etc. Perhaps the CMO agent could generate meta description and pass it through, and the Publish agent would embed it in the HTML . Also support for Open Graph tags for social media (title, description, image). This requires storing those in DB or events and updating templates.
 
 Handle Images and Media: If content generation in Phase 2 includes images (either by linking or generating with DALL-E etc.), then the Publish agent must handle them:
 
@@ -1465,52 +1468,9 @@ Possibly upload images to a CDN or S3 as well and adjust HTML to reference them.
 
 Ensure images have correct permissions and paths.
 
-Could involve scanning content for image links (like if ContentGen returns markdown with ![](image_url) placeholders), then retrieving those images (maybe from a link or generating them), storing in S3, and replacing the src in HTML.
+Could involve scanning content for image links (like if ContentGen returns markdown with ![](image\_url) placeholders), then retrieving those images (maybe from a link or generating them), storing in S3, and replacing the src in HTML.
 
 That’s a complex addition but a realistic one for richer content.
 
-Analytics Integration: Automatically embed analytic tags or tracking codes on the page. For example, injecting a Google Analytics <script> or a tracking pixel ID. Could be configured via environment. This ensures all pages have analytics without manual editing.
+Analytics Integration: Automatically embed analytic tags or tracking codes on the page. For example, injecting a Google Analytics 
 
-Performance improvements: If content volume increases drastically:
-
-Possibly switch to batch publishing if needed (though event-driven is fine). Or introduce concurrency scaling if needed.
-
-Or if static site becomes large, consider a static site generator integration (like generating an entire site rather than one page at a time). That might be beyond single agent – more of a build process. Not likely needed soon, but maybe if the structure becomes more complex (like needing to regenerate category pages each time).
-
-Error Resilience and Self-healing: Future pipeline enhancements might include automatic retries for transient failures, or storing failed events and trying again after a cooldown. E.g., if publish fails due to a momentary S3 glitch, Phase 2 could reattempt after a minute via a DLQ redrive.
-
-User Feedback Loop: Perhaps add a step where after content published, it notifies the CMO agent or another feedback mechanism with a link, and maybe monitors page performance (views, etc.) which the CFO might care about. That loop is future (like the CFO agent might collect traffic metrics to gauge content ROI). The ContentPublished events could be input to such analysis.
-
-Refine Slug Logic: If we see slug collisions or want consistent URL patterns (like including date or category in URL), refine slug generation. Possibly incorporate content categories or ensure uniqueness by adding ID if needed.
-
-Internationalization: If Phase 2 includes multi-language content, the Publish agent could need to handle different target sections for languages, maybe different buckets or subfolders for locales (like /en/slug.html, /fr/slug.html). We’d add logic based on a content language field.
-
-Templating engine: If site design gets more complex, using a templating engine (like Jinja2 or similar) for HTML might be better than string concatenation. Could incorporate that if multiple sections (header, footer, etc.) need to be combined. Possibly even fetch templates from S3 to allow updating site design without code deploy.
-
-Partial Update Flow: If editing an existing article becomes needed, Phase 2 might require a way to trigger republish of an updated draft. Possibly the pipeline could handle "ContentUpdateRequest" events and Publish agent would replace existing file. Currently, it always overwrites if same slug used, so it could already handle updates by just republishing same slug (the new content would override old). But the pipeline would need to differentiate new vs update in metrics maybe. Also consider if the URL or slug should change on updates (usually no, so slug stays same, our logic already does that if topic unchanged). So maybe minimal changes needed besides having a path to trigger such updates via events.
-
-13.2 Technical Debt & Refactor Candidates
-
-Hardcoded Strings & Duplication: Currently the HTML template (if any) might be hardcoded in code. That is technical debt because changing site look requires code change. We should refactor to load template from an external file or environment. E.g., store an HTML skeleton in S3 or in an environment variable (though env is not great for large text). Or use a templating library for cleanliness. As site evolves, making this dynamic will reduce code changes for cosmetic updates.
-
-Unified Config Management: We have bucket names and such in env variables. As we add more (like distribution ID, template path, etc.), consider grouping config or using Systems Manager Parameter Store for better management, especially if more environments. Not urgent now, but as config grows, a refactor to centralize configuration loading could be prudent.
-
-Better Error Handling Patterns: Right now we do try/except and manual event on error. If multiple agents follow this pattern, maybe abstract an error reporting function or use a decorator pattern to catch exceptions and send events automatically. Could reduce code repetition and ensure consistency (like ensure every error event has content_id and agent name etc.). Right now each agent implemented its own logic – refactor to a common utility in the code repository might be beneficial as technical debt reduction.
-
-Testing and Staging: As pipeline grows, manual test gets harder. Might invest in an automated integration test suite (maybe using a localstack or a staging stack with test events). Setting up a pipeline test harness would pay off to catch issues pre-prod. So, incorporate infrastructure for that in Phase 2 (this is more process than code refactor, but relevant to quality).
-
-Monitoring Consolidation: Each agent posts metrics and events. A future refactor could be building a unified dashboard or log aggregator that shows an entire content's journey (like using content_id to correlate logs across agents). We partially do that by content_id in logs, but maybe building an ELK or CloudWatch Insights query across all agent logs by content_id might be formalized. This is not code in the agent, but overall monitoring improvement (less of debt, more of an enhancement).
-
-Remove Redundancy between DB and events: We both update DB and send event about published status. Possibly that’s double. In future, if we trust events, maybe DB is just for content data not state, or vice versa. Right now, it's fine, but if we find it redundant, could simplify. However, DB is good for queryable history, events are ephemeral.
-
-Orchestrate with Step Functions? If pipeline complexity grows (with parallel tasks or conditions), might consider refactoring from decoupled events to an orchestrator (like Step Functions or simple workflow). That could centralize error handling and state transitions. It's a big change, likely not needed until more complexity (maybe beyond Phase 2).
-
-Documentation and Traceability: We should ensure each piece (like if slug generation logic changes, update documentation so others know how URLs are formed). Also document the place in code where templates reside for easy update. Reducing technical debt around "tribal knowledge" by proper docs is an action item (not code refactor, but process).
-
-Cleanup of Old Drafts: If needed, a small refactor to incorporate deletion of drafts after publish might be considered to save space or avoid confusion. It's low priority because cost/storage is minor, but as a maintenance tasks perhaps in future or via a separate cleanup script (maybe after verifying content in Prod, the draft could be removed).
-
-Include more content metadata: If later we add categories/tags, the pipeline will pass those through. We might need to refactor the publish agent to handle such (e.g., place content in category subfolders or include tags in HTML meta). That’s more new feature than refactor, but it would require code changes we can foresee and perhaps design for (like we could already structure the code to easily add category handling).
-
-Idempotency and Replays: If not already, consider making publish re-runnable easily. It's mostly there. If we wanted to replay an entire backlog (like after a long outage, to republish all pending), maybe build a small script or incorporate logic to detect items in DB with reviewed status and publish them. For now, not needed, but in post-mortem of any incident, that might come up. Could refactor to have an on-start scan for any missed items (dangerous if misused, but could be behind a manual trigger).
-
-Separation of Concerns: Right now, this agent does conversion and publishing. If in future we had different output formats (like also produce a PDF version of article), should that be separate agent or integrated? Possibly separate to keep responsibilities clear. Not an immediate refactor, but something to consider if expansion happens.
