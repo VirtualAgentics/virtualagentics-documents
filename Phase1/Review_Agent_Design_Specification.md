@@ -1,3 +1,15 @@
+---
+title: "Review Agent Design Specification"
+status: "Draft"
+audience: "Internal – AI Engineering, DevOps, Phase 1 Agent Developers"
+authors: "VirtualAgentics AI Engineering Team"
+version: "0.2"
+date: "2025-06-11"
+gpt_model: "Formatted and standardized by GPT-4o"
+---
+
+# Review Agent Design Specification
+
 VirtualAgentics Phase 1 — Review Agent Design Specification
 1. Document Control
 | Version | Date | Author(s) | Reviewer(s) | Description |
