@@ -462,353 +462,353 @@ Logging strategy:
 - Logging environment config at startup can also be helpful: "Using bucket A and bucket B, distribution D". This appears in logs once per cold start typically and helps troubleshooting config issues.
 ## 9.2 Metrics
 Key metrics for the Publish agent:
-Publish.SuccessCount – increment for each content published successfully (i.e., ContentPublished event sent). Allows tracking volume of published content over time.
-Publish.FailureCount – increment for each publishing failure (PublishFailure event). Ideally zero; if >0 triggers alerts (see below).
-Possibly classify failure reasons by dimension (like reason = 'ConversionError' or 'UploadError') to pinpoint if there's a pattern (like every failure is conversion, meaning maybe a bug in conversion for certain content).
-Publish.LatencyMs – measure time from event receipt to completion. Since it's short, might not be critical, but we can gather to ensure it remains low. If it spiked, might indicate S3 slowdown or CloudFront issues.
-Publish.ContentSize – optionally record size of content processed (in bytes). Not crucial but could correlate with latency or highlight if content sizes are growing beyond expectations.
-Publish.CloudFrontLatency – if we wait for invalidation or such, measure that specifically if synchronous (we likely won't wait for complete invalidation, so negligible).
-Because publish events volume is low (similar to content volume), metrics will have low numbers, but still useful for verifying everything that got review also got published (SuccessCount vs. content requests).
-The metrics can be emitted either by using CloudWatch EMF (embedding in logs) or by PutMetric calls for each event.
-Possibly simpler: use PutMetric in code:
-e.g., after publish success, Publish.SuccessCount +=1.
-after failure, Publish.FailureCount +=1.
-measure time from start to finish (with Python time) to record latency.
-The success count should ideally equal the number of ContentReady (assuming everything eventually publishes). If there's discrepancy (failures or still pending), one can investigate.
+- **Publish.SuccessCount** – increment for each content published successfully (i.e., ContentPublished event sent). Allows tracking volume of published content over time.
+- **Publish.FailureCount** – increment for each publishing failure (PublishFailure event). Ideally zero; if >0 triggers alerts (see below).
+- Possibly classify failure reasons by dimension (like reason = 'ConversionError' or 'UploadError') to pinpoint if there's a pattern (like every failure is conversion, meaning maybe a bug in conversion for certain content).
+- **Publish.LatencyMs** – measure time from event receipt to completion. Since it's short, might not be critical, but we can gather to ensure it remains low. If it spiked, might indicate S3 slowdown or CloudFront issues.
+- **Publish.ContentSize** – optionally record size of content processed (in bytes). Not crucial but could correlate with latency or highlight if content sizes are growing beyond expectations.
+- **Publish.CloudFrontLatency** – if we wait for invalidation or such, measure that specifically if synchronous (we likely won't wait for complete invalidation, so negligible).
+- Because publish events volume is low (similar to content volume), metrics will have low numbers, but still useful for verifying everything that got review also got published (SuccessCount vs. content requests).
+- The metrics can be emitted either by using CloudWatch EMF (embedding in logs) or by PutMetric calls for each event.
+- Possibly simpler: use PutMetric in code:
+  - e.g., after publish success, Publish.SuccessCount +=1.
+  - after failure, Publish.FailureCount +=1.
+  - measure time from start to finish (with Python time) to record latency.
+- The success count should ideally equal the number of ContentReady (assuming everything eventually publishes). If there's discrepancy (failures or still pending), one can investigate.
 ## 9.3 Distributed Tracing
-If X-Ray is enabled, the Publish agent would trace:
-The S3 get call, S3 put call, DynamoDB update, CloudFront invalidation as subsegments.
-It can also include a segment for markdown conversion (as a custom subsegment or just as part of the main).
-If we propagate a trace from earlier pipeline:
-The ReviewCompleted event might not carry X-Ray trace by default, but if we included trace IDs in events (which we haven't in Phase 1 likely), we could continue it.
-Without that, each agent will have separate trace.
-We can still use X-Ray to debug within this agent (like how long S3 calls took).
-X-Ray overhead is small at our scale. Possibly optional to keep off if not needed.
-It might help in diagnosing if any external call is slow (like if S3 was slow one day, the X-Ray trace would show the get or put took longer).
-Possibly enable in dev environment if not needed in prod due to cost. But could enable sampling in prod as well because traffic is low.
-For now, keep as optional. (Our logs and metrics likely suffice given the simplicity).
-If an end-to-end view is desired: one could manually correlate by content_id across X-Ray traces of different agents (not trivial). Might not be worth it. Instead a pipeline sequence diagram or event log is easier.
+- If X-Ray is enabled, the Publish agent would trace:
+  - The S3 get call, S3 put call, DynamoDB update, CloudFront invalidation as subsegments.
+  - It can also include a segment for markdown conversion (as a custom subsegment or just as part of the main).
+- If we propagate a trace from earlier pipeline:
+  - The ReviewCompleted event might not carry X-Ray trace by default, but if we included trace IDs in events (which we haven't in Phase 1 likely), we could continue it.
+  - Without that, each agent will have separate trace.
+  - We can still use X-Ray to debug within this agent (like how long S3 calls took).
+- X-Ray overhead is small at our scale. Possibly optional to keep off if not needed.
+- It might help in diagnosing if any external call is slow (like if S3 was slow one day, the X-Ray trace would show the get or put took longer).
+- Possibly enable in dev environment if not needed in prod due to cost. But could enable sampling in prod as well because traffic is low.
+- For now, keep as optional. (Our logs and metrics likely suffice given the simplicity).
+- If an end-to-end view is desired: one could manually correlate by content_id across X-Ray traces of different agents (not trivial). Might not be worth it. Instead a pipeline sequence diagram or event log is easier.
 ## 9.4 Alert Thresholds & Destinations
-Publish Failure Alert: If Publish.FailureCount > 0 in a given time window (or specifically if any failure event occurs), trigger an immediate alert (since any publish failure means content didn't go out as expected).
-Could be PagerDuty/severity-high if content pipeline is critical (especially if it's for external customers). For internal content, maybe email/Slack to team suffices. But presumably, publishing content is a key deliverable, so treat failures seriously.
-In practice, we'd set CloudWatch Alarm on the metric or configure SNS on error events. Perhaps simpler: the error events on /content/errors can be forwarded to an alerting SNS -> email. Because presumably all errors from all agents are important. But to not flood, maybe separate by agent; but since any error is abnormal anyway, central monitoring could catch it and escalate.
-Delayed Content Alert: If a content got stuck (review done but no publish within X minutes). Hard to do automatically unless system tracks expected timeline. But we might:
-Check if number of approved content minus published content is >0 for a while.
-We could approximate: if SuccessCount (published) is more than a certain ratio behind ReviewCompleted count (assuming we track that metric too) over a period.
-Simpler for Phase 1: rely on failure alarms. If no failure and content was not published, then maybe it didn't pass review or didn't trigger. Possibly monitor pipeline events overall with a dashboard, but not do an alert since no explicit "content stuck" signal.
-High Latency: If average or p95 Publish.LatencyMs > some threshold (e.g., > 5s unexpectedly, since normally <1s). Could indicate a slow down (maybe S3 issues). We could set a CloudWatch alarm for extremely high latency in a sample (though our volume is small, maybe not enough data to compute percentiles well). Might not need formal alert, but worth having metric to manually inspect if pipeline seems slow.
-No Publish events: If we expect at least some regular content (like daily) but see none published in a timeframe, that may be an upstream issue. Perhaps the CMO or ContentGen would catch that first. But a catch-all might be: if no Publish.SuccessCount increment in X days (and we expected some), alert. This might be too involved to automate given content scheduling isn't continuous (some days might legitimately have none).
-Instead, the content team will likely notice if nothing published when there should have been.
-For Phase 1, the critical one is any failure triggers alert.
-Alert destination: Typically an operations channel (like Slack #ops or an email to devops on-call). Possibly the content team as well if a content fails, since they might need to know it didn't go out. But likely first dev team fixes it or manually publishes then informs content team.
-If using a centralized monitoring system, we integrate these CloudWatch alarms into it. For now, assume a CloudWatch Alarm with SNS to on-call email for simplicity.
-Also likely to share error event info (like which content, reason) in the alert so they know what to do.
+- **Publish Failure Alert**: If Publish.FailureCount > 0 in a given time window (or specifically if any failure event occurs), trigger an immediate alert (since any publish failure means content didn't go out as expected).
+  - Could be PagerDuty/severity-high if content pipeline is critical (especially if it's for external customers). For internal content, maybe email/Slack to team suffices. But presumably, publishing content is a key deliverable, so treat failures seriously.
+  - In practice, we'd set CloudWatch Alarm on the metric or configure SNS on error events. Perhaps simpler: the error events on /content/errors can be forwarded to an alerting SNS -> email. Because presumably all errors from all agents are important. But to not flood, maybe separate by agent; but since any error is abnormal anyway, central monitoring could catch it and escalate.
+- **Delayed Content Alert**: If a content got stuck (review done but no publish within X minutes). Hard to do automatically unless system tracks expected timeline. But we might:
+  - Check if number of approved content minus published content is >0 for a while.
+  - We could approximate: if SuccessCount (published) is more than a certain ratio behind ReviewCompleted count (assuming we track that metric too) over a period.
+  - Simpler for Phase 1: rely on failure alarms. If no failure and content was not published, then maybe it didn't pass review or didn't trigger. Possibly monitor pipeline events overall with a dashboard, but not do an alert since no explicit "content stuck" signal.
+- **High Latency**: If average or p95 **Publish.LatencyMs** > some threshold (e.g., > 5s unexpectedly, since normally <1s). Could indicate a slow down (maybe S3 issues). We could set a CloudWatch alarm for extremely high latency in a sample (though our volume is small, maybe not enough data to compute percentiles well). Might not need formal alert, but worth having metric to manually inspect if pipeline seems slow.
+- **No Publish events**: If we expect at least some regular content (like daily) but see none published in a timeframe, that may be an upstream issue. Perhaps the CMO or ContentGen would catch that first. But a catch-all might be: if no Publish.SuccessCount increment in X days (and we expected some), alert. This might be too involved to automate given content scheduling isn't continuous (some days might legitimately have none).
+- Instead, the content team will likely notice if nothing published when there should have been.
+- For Phase 1, the critical one is any failure triggers alert.
+- **Alert destination**: Typically an operations channel (like Slack #ops or an email to devops on-call). Possibly the content team as well if a content fails, since they might need to know it didn't go out. But likely first dev team fixes it or manually publishes then informs content team.
+- If using a centralized monitoring system, we integrate these CloudWatch alarms into it. For now, assume a CloudWatch Alarm with SNS to on-call email for simplicity.
+- Also likely to share error event info (like which content, reason) in the alert so they know what to do.
 10. Performance & Scaling
 ### 10.1 Expected Workload Profile
-Matches review and generation: ~10–50 publish events/day in Phase 1, possibly one at a time.
-Typically content pipeline is not heavy load; a few pieces per day or week. So Publish agent usage is low. Possibly the quietest agent in terms of run frequency (if content generation is weekly or daily).
-Burst: Might rarely have bursts. If, say, the CMO agent queued 5 articles to be generated in quick succession (like a batch for a product launch), then contentgen might generate them one after another, reviews them quickly, publish might get 5 tasks in a short time.
-Concurrency=2 means it might do two at once, then others queued by SNS, finishing within maybe a minute or two all. That's fine.
-Peak concurrency: Possibly 2 if two review events delivered at same moment. More than 2 improbable at Phase 1 scale.
-If volume increased (Phase 2 maybe multi-lingual or user content scenario with dozens a day), we can increase concurrency. But even dozens a day is trivial sequentially for a computer, so concurrency 2 is usually fine unless dozens per minute.
-The tasks are I/O-bound mostly; sequential processing of 10 items might take ~10 seconds total, not an issue. Concurrency is more for pipeline speed or if strictly needed to meet a publishing time window.
-Throughput: Could easily handle well above Phase 1 demands (hundreds per hour) if needed by scaling concurrency or just sequentially since even sequential can do ~60 per minute easily.
-So the agent is not a bottleneck.
+- Matches review and generation: ~10–50 publish events/day in Phase 1, possibly one at a time.
+- Typically content pipeline is not heavy load; a few pieces per day or week. So Publish agent usage is low. Possibly the quietest agent in terms of run frequency (if content generation is weekly or daily).
+- **Burst**: Might rarely have bursts. If, say, the CMO agent queued 5 articles to be generated in quick succession (like a batch for a product launch), then contentgen might generate them one after another, reviews them quickly, publish might get 5 tasks in a short time.
+  - Concurrency=2 means it might do two at once, then others queued by SNS, finishing within maybe a minute or two all. That's fine.
+- **Peak concurrency**: Possibly 2 if two review events delivered at same moment. More than 2 improbable at Phase 1 scale.
+- If volume increased (Phase 2 maybe multi-lingual or user content scenario with dozens a day), we can increase concurrency. But even dozens a day is trivial sequentially for a computer, so concurrency 2 is usually fine unless dozens per minute.
+- The tasks are I/O-bound mostly; sequential processing of 10 items might take ~10 seconds total, not an issue. Concurrency is more for pipeline speed or if strictly needed to meet a publishing time window.
+- **Throughput**: Could easily handle well above Phase 1 demands (hundreds per hour) if needed by scaling concurrency or just sequentially since even sequential can do ~60 per minute easily.
+- So the agent is not a bottleneck.
 ### 10.2 Latency & Throughput Targets
-Latency: each publish should complete in < 5 seconds. Our target is ~1 second average.
-If CloudFront invalidation is invoked synchronously (the API returns quickly but the invalidation propagation is async, so we don't wait for it to actually expire content, just accept request), so that doesn't add much.
-If a heavy template or extremely large content, maybe up to 2-3s but still way below 30s limit.
-If content had large images (not likely Phase 1 as generation doesn't do images), then uploading images might add a second or so per image (not in scope).
-The pipeline end-to-end from content request to published likely is a few seconds if all smooth (with contentgen being maybe largest chunk). The publish agent adds negligible delay, which is good for quick content release.
-Throughput: For sequential processing, can do maybe 60 contents/min (if each ~1s).
-If concurrency needed, just scale. But Phase 1 fine as is.
-No formal throughput requirement beyond "should not be slower than content generation pipeline".
-The site likely doesn't want dozens of posts per minute anyway from a business standpoint.
-Scalability: If needed, raising Lambda concurrency or even converting to some other architecture (like an asynchronous pipeline or direct integration to CMS) could be done. But not needed at our scale.
+- **Latency*: each publish should complete in < 5 seconds. Our target is ~1 second average.
+  - If CloudFront invalidation is invoked synchronously (the API returns quickly but the invalidation propagation is async, so we don't wait for it to actually expire content, just accept request), so that doesn't add much.
+  - If a heavy template or extremely large content, maybe up to 2-3s but still way below 30s limit.
+  - If content had large images (not likely Phase 1 as generation doesn't do images), then uploading images might add a second or so per image (not in scope).
+- The pipeline end-to-end from content request to published likely is a few seconds if all smooth (with contentgen being maybe largest chunk). The publish agent adds negligible delay, which is good for quick content release.
+- **Throughput**: For sequential processing, can do maybe 60 contents/min (if each ~1s).
+  - If concurrency needed, just scale. But Phase 1 fine as is.
+- No formal throughput requirement beyond "should not be slower than content generation pipeline".
+- The site likely doesn't want dozens of posts per minute anyway from a business standpoint.
+- **Scalability**: If needed, raising Lambda concurrency or even converting to some other architecture (like an asynchronous pipeline or direct integration to CMS) could be done. But not needed at our scale.
 ### 10.3 Auto-scaling Triggers and Limits
-The Lambda scales automatically up to concurrency=2 reserved. If more events come simultaneously (exceeding 2), the third will wait until one finishes (SNS will hold it or attempt concurrently above limit and get throttled).
-If a scenario arises where, say, content generation pipeline was massively scaled and 10 review events come at once often, we would up the concurrency to 10. But likely unnecessary in Phase 1.
-Memory (256MB) is plenty per function even if content size grows. If in future content included images or attached files, or much larger text, memory usage might need a bump for conversion overhead. Right now, text is small.
-S3 and Dynamo throughput is well within free tier levels basically. If we did mass publishing (like migrating hundreds of posts at once), might consider using multi-part upload if any objects > 5MB (not likely for text).
-At current, one piece might be < 100KB, no throughput issues.
-Watch out for any potential CloudFront API rate limits if called in bulk (like distribution invalidation has limits, often ~ invalidation requests per minute). If we somehow published hundreds of items at once, better to batch them into one invalidation. But Phase 1 won't hit CF rate limits (maybe 2-3 invalidations a day).
-So no special scaling triggers needed beyond what Lambda and AWS handle by default.
+- The Lambda scales automatically up to concurrency=2 reserved. If more events come simultaneously (exceeding 2), the third will wait until one finishes (SNS will hold it or attempt concurrently above limit and get throttled).
+- If a scenario arises where, say, content generation pipeline was massively scaled and 10 review events come at once often, we would up the concurrency to 10. But likely unnecessary in Phase 1.
+- Memory (256MB) is plenty per function even if content size grows. If in future content included images or attached files, or much larger text, memory usage might need a bump for conversion overhead. Right now, text is small.
+- S3 and Dynamo throughput is well within free tier levels basically. If we did mass publishing (like migrating hundreds of posts at once), might consider using multi-part upload if any objects > 5MB (not likely for text).
+- At current, one piece might be < 100KB, no throughput issues.
+- Watch out for any potential CloudFront API rate limits if called in bulk (like distribution invalidation has limits, often ~ invalidation requests per minute). If we somehow published hundreds of items at once, better to batch them into one invalidation. But Phase 1 won't hit CF rate limits (maybe 2-3 invalidations a day).
+- So no special scaling triggers needed beyond what Lambda and AWS handle by default.
 11. Testing Strategy
 ### 11.1 Unit Tests
-Markdown Conversion: Provide a sample markdown string and run the conversion function. Verify that the output contains expected HTML tags. E.g., "# Title" becomes <h1>Title</h1>. Use a lightweight markdown library in tests or a stub if the actual library is heavy (but likely just use the same library to ensure parity). Also test edge cases: empty content (should produce maybe empty HTML body), content with special characters (make sure not broken), etc.
-Slug Generation: Test the slugify function with various inputs:
-Normal phrase -> lower-hyphen,
-phrase with punctuation (ensures they are removed or replaced properly),
-phrase with non-ASCII (maybe remove or transliterate? depending on design; if out-of-scope, just remove them).
-No title scenario -> should default to content_id (maybe test that branch).
-Colliding titles scenario (if our code would append ID or number, but currently we don't implement that; so might skip).
-S3 interactions (mocked):
-Simulate get_object returning a known markdown content (like "Hello world") as bytes. Ensure our code calls the right bucket/key and gets the data (with mocks, verify call arguments).
-Simulate put_object and verify it is called with the correct bucket, key (including slug logic), and that the content to put is the HTML from conversion. Possibly verify ContentType = text/html is set.
-Simulate the scenario where get_object raises an exception or returns no data (like file not found) and ensure the function would catch that and plan to emit a PublishFailure (we might not directly test event emission here, but we can test that the function returns an indication of failure or calls the error publish mock).
-Simulate put_object failing (throwing exception). Ensure we catch and mark failure.
-DynamoDB update (mock):
-Verify that we call UpdateItem with correct content_id key and update expression to set status to published and possibly URL/timestamp. If we supply a test timestamp in environment or freeze time, check that correct values are passed. If code uses a simplified client method, just check that function is called once if things go well.
-Simulate the update throwing an exception (like conditional check fail or throughput exceed). Ensure we log or handle it gracefully (the test might check that our function logs a warning or doesn't raise).
-CloudFront invalidation (if implemented):
-If code calls a CloudFront client, simulate a successful response. Ensure it is called with correct distribution ID and path (the path should match the file we uploaded, e.g., "/posts/slug.html").
-We might not wait for invalidation complete, so test just that CreateInvalidation was invoked and we didn't treat it as failure.
-Simulate that invalidation call throws an exception (perhaps invalid distribution ID config), check that we catch it and just warn (if that's our plan).
-Full success flow:
-Simulate everything succeeding and ensure at end we attempt to publish the ContentPublished event. Use a mock for SNS publish. Check it was called with the right topic ARN and message that includes content_id and possibly URL.
-Possibly verify the message structure matches our content-published-v1.json expectation (like fields present). But a unit test can only easily verify what we passed to SNS client publish if we have that accessible.
-Failure flow:
-Force a failure at each stage and ensure the code path leads to appropriate error event:
-Example: make markdown conversion throw; then ensure we did not call put, update, etc. and did call error publish.
-Another: make S3 put throw; ensure we attempted it given conversion succeeded but then error path triggered event publish for failure after catching.
-Could test that in each failure scenario, the SNS publish for ContentPublished is not called (so we don't erroneously signal success).
-Ensure in these cases, the function either returns a special error indicator or at least did the error event call. If our code design is such that the unit test can check a flag or call to a mock error publisher, we can confirm that.
-Edge Input:
-If event missing slug or topic, ensure our code still works (generates slug from id).
-If content is extremely trivial (like just "Hi"), does conversion and publish still do the right minimal output.
-If content has relative links or images, though Phase 1 no images, but maybe link [see](other-article), our agent wouldn't fix those references beyond converting to <a>. Not much to test unless we had logic for adjusting links (which we likely not do).
-If content has HTML already inside (like ContentGen included some), our markdown converter might just pass it through or escape it depending on library. We should test that scenario to ensure we aren't double-escaping legitimate HTML. e.g., a code snippet or a script tag? But less likely. Maybe skip if not expecting it.
-These unit tests rely on mocking AWS services. Could use moto library for S3 and Dynamo to simulate (which actually stores in memory), or simpler approach: monkeypatch boto3 clients to stubs. Possibly simpler to create stub classes with expected interface (get_object, put_object, etc.) and inject them.
-Also test the idempotence: If the code is called twice with same content, ideally it should do same steps. Hard to check idempotence in unit, but we can ensure that if something already exists (the put returns success even if overriding an existing file, which is fine in S3 semantics).
-If we had an optional deletion of draft (we decided not to do in Phase 1), but if did, test that we call DeleteObject at end and handle if fails (but since we skip, no test needed).
-Memory or performance cannot be directly unit tested, but we can at least ensure our code isn't doing obviously inefficient things (like reading the entire S3 file repeatedly or building giant strings in loops unnecessarily; but given small scope, not an issue).
+- **Markdown Conversion**: Provide a sample markdown string and run the conversion function. Verify that the output contains expected HTML tags. E.g., "# Title" becomes <h1>Title</h1>. Use a lightweight markdown library in tests or a stub if the actual library is heavy (but likely just use the same library to ensure parity). Also test edge cases: empty content (should produce maybe empty HTML body), content with special characters (make sure not broken), etc.
+ **Slug Generation**: Test the slugify function with various inputs:
+  - Normal phrase -> lower-hyphen,
+  - phrase with punctuation (ensures they are removed or replaced properly),
+  - phrase with non-ASCII (maybe remove or transliterate? depending on design; if out-of-scope, just remove them).
+  - No title scenario -> should default to content_id (maybe test that branch).
+  - Colliding titles scenario (if our code would append ID or number, but currently we don't implement that; so might skip).
+- **S3 interactions (mocked)**:
+  -Simulate get_object returning a known markdown content (like "Hello world") as bytes. Ensure our code calls the right bucket/key and gets the data (with mocks, verify call arguments).
+  - Simulate put_object and verify it is called with the correct bucket, key (including slug logic), and that the content to put is the HTML from conversion. Possibly verify ContentType = text/html is set.
+  - Simulate the scenario where get_object raises an exception or returns no data (like file not found) and ensure the function would catch that and plan to emit a PublishFailure (we might not directly test event emission here, but we can test that the function returns an indication of failure or calls the error publish mock).
+  - Simulate put_object failing (throwing exception). Ensure we catch and mark failure.
+- **DynamoDB update (mock)** :
+  - Verify that we call UpdateItem with correct content_id key and update expression to set status to published and possibly URL/timestamp. If we supply a test timestamp in environment or freeze time, check that correct values are passed. If code uses a simplified client method, just check that function is called once if things go well.
+  - Simulate the update throwing an exception (like conditional check fail or throughput exceed). Ensure we log or handle it gracefully (the test might check that our function logs a warning or doesn't raise).
+- **CloudFront invalidation (if implemented)**:
+  - If code calls a CloudFront client, simulate a successful response. Ensure it is called with correct distribution ID and path (the path should match the file we uploaded, e.g., "/posts/slug.html").
+  - We might not wait for invalidation complete, so test just that CreateInvalidation was invoked and we didn't treat it as failure.
+  - Simulate that invalidation call throws an exception (perhaps invalid distribution ID config), check that we catch it and just warn (if that's our plan).
+- **Full success flow**:
+  - Simulate everything succeeding and ensure at end we attempt to publish the ContentPublished event. Use a mock for SNS publish. Check it was called with the right topic ARN and message that includes content_id and possibly URL.
+  - Possibly verify the message structure matches our content-published-v1.json expectation (like fields present). But a unit test can only easily verify what we passed to SNS client publish if we have that accessible.
+- **Failure flow**:
+  - Force a failure at each stage and ensure the code path leads to appropriate error event:
+    - Example: make markdown conversion throw; then ensure we did not call put, update, etc. and did call error publish.
+    - Another: make S3 put throw; ensure we attempted it given conversion succeeded but then error path triggered event publish for failure after catching.
+    - Could test that in each failure scenario, the SNS publish for ContentPublished is not called (so we don't erroneously signal success).
+    - Ensure in these cases, the function either returns a special error indicator or at least did the error event call. If our code design is such that the unit test can check a flag or call to a mock error publisher, we can confirm that.
+- **Edge Inpu**t:
+  - If event missing slug or topic, ensure our code still works (generates slug from id).
+  - If content is extremely trivial (like just "Hi"), does conversion and publish still do the right minimal output.
+  - If content has relative links or images, though Phase 1 no images, but maybe link [see](other-article), our agent wouldn't fix those references beyond converting to <a>. Not much to test unless we had logic for adjusting links (which we likely not do).
+  - If content has HTML already inside (like ContentGen included some), our markdown converter might just pass it through or escape it depending on library. We should test that scenario to ensure we aren't double-escaping legitimate HTML. e.g., a code snippet or a script tag? But less likely. Maybe skip if not expecting it.
+- These unit tests rely on mocking AWS services. Could use moto library for S3 and Dynamo to simulate (which actually stores in memory), or simpler approach: monkeypatch boto3 clients to stubs. Possibly simpler to create stub classes with expected interface (get_object, put_object, etc.) and inject them.
+- Also test the idempotence: If the code is called twice with same content, ideally it should do same steps. Hard to check idempotence in unit, but we can ensure that if something already exists (the put returns success even if overriding an existing file, which is fine in S3 semantics).
+- If we had an optional deletion of draft (we decided not to do in Phase 1), but if did, test that we call DeleteObject at end and handle if fails (but since we skip, no test needed).
+- Memory or performance cannot be directly unit tested, but we can at least ensure our code isn't doing obviously inefficient things (like reading the entire S3 file repeatedly or building giant strings in loops unnecessarily; but given small scope, not an issue).
 ### 11.2 Integration Tests
-Dev environment end-to-end test:
-Trigger a full pipeline in a dev environment (or using localstack to simulate S3 and Dynamo):
-Put a known markdown file in the draft bucket and simulate a ReviewCompleted event (maybe via SNS or call Lambda handler directly).
-Verify after the Publish agent runs:
-The HTML file appears in the public bucket with correct content and name.
-The DynamoDB record for that content has status updated (if we have access to check dev DB).
-The ContentPublished event is either visible on some test subscriber or at least we see a log that it was sent (maybe integrate an SQS or another Lambda to capture published events in dev).
-Alternatively, if not easy, just verify via logs that it got to "Published content with URL ..." and no errors.
-Could also run the pipeline up to Review agent as integration, but focusing on publish:
-We can simulate by actually triggering the publish Lambda either manually or by sending an SNS message to the dev topic it listens to.
-Use a test content id and pre-populated content.
-If working with real AWS dev environment:
-Possibly manually create a DynamoDB item, manually upload draft to S3, then manually trigger SNS event.
-Check S3 output and DB after.
-Use AWS CLI or SDK to confirm outputs (like list bucket for new file, get content to confirm it matches expected HTML format).
-Error injection test in integration:
-Purposefully misconfigure or break something to see if PublishFailure event is sent and how pipeline reacts:
-For instance, change the public bucket name to an incorrect one in a test deploy or environment variable to force S3 put failure (bucket not found or access denied). Then send an event:
-Expect to see in logs and maybe in error SNS subscriber that a PublishFailure happened.
-Check that the content was not uploaded (shouldn't exist).
-And confirm the error event came through (if we have a test subscriber).
-Another approach: feed a markdown content that maybe the conversion library might have an issue with (though unlikely, we can attempt something like an extremely long word or weird formatting to see if library fails; not easy to force an error without hacking the library).
-Or simulate environment lacking permissions (like remove the role permission in dev to put S3 object) to test error path. But that requires IAM change which maybe not convenient. Possibly skip, as unit tests can cover logic for that scenario.
-These tests ensure that even if something goes wrong, the pipeline signals it, and no partial side-effects (like check that Dynamo didn't update if it was supposed to update after failure).
-Performance observation:
-Not a typical integration test, but we can publish a moderately large content (maybe artificially create a markdown of 50k characters) and measure how long it took via logs. This can show if it's comfortably within limits. Could do in dev environment and observe logs.
-Multiple content test:
-In dev, try publishing two events concurrently (if possible):
-Could either use threading or send two SNS messages at same time. The Lambda likely handles sequentially if concurrency 1 in dev, unless we adjust concurrency. Perhaps set concurrency 2 and see if AWS triggers two concurrently.
-Or simulate by invoking the Lambda directly in quick succession on separate threads or processes (but direct invocation vs SNS might not fully simulate concurrency in same environment).
-If done, check that both outputs appear (two files in bucket) and no interference (like each had correct content).
-Check logs to see if one instance or two instances handled them concurrently (maybe two different request IDs).
-This assures concurrency works but expected to anyway because AWS separates executions.
-End-to-end pipeline (manual):
-Ideally, run a scenario from CMO all the way to Publish in a staging environment with one or two content pieces. Then physically verify the content is visible on the target site or bucket.
-e.g., after pipeline runs, open the S3 static site URL or if integrated with a real domain, open that domain to see if content accessible.
-That validates not only agent interactions but that the content is indeed delivered to end-users.
-Document any manual steps needed to recover from a failure (maybe not part of automated tests but part of runbook, which we have in Operational sections).
-Integration test for "published content accessible":
-Possibly write a small script that after publish agent finishes (subscribe to ContentPublished events in dev), it fetches the public URL (if accessible publicly even in dev) to ensure it returns expected content (HTTP 200 and contains known string).
-That would truly confirm end-user perspective.
-For dev, if no domain, can access S3 website endpoint if configured. If not configured, skip this test.
+- **Dev environment end-to-end test*:
+  - Trigger a full pipeline in a dev environment (or using localstack to simulate S3 and Dynamo):
+    - Put a known markdown file in the draft bucket and simulate a ReviewCompleted event (maybe via SNS or call Lambda handler directly). 
+    - Verify after the Publish agent runs:
+    - The HTML file appears in the public bucket with correct content and name.
+    - The DynamoDB record for that content has status updated (if we have access to check dev DB).
+    - The ContentPublished event is either visible on some test subscriber or at least we see a log that it was sent (maybe integrate an SQS or another Lambda to capture published events in dev).
+    - Alternatively, if not easy, just verify via logs that it got to "Published content with URL ..." and no errors.
+  - Could also run the pipeline up to Review agent as integration, but focusing on publish:
+    - We can simulate by actually triggering the publish Lambda either manually or by sending an SNS message to the dev topic it listens to.
+    - Use a test content id and pre-populated content.
+  - If working with real AWS dev environment:
+    - Possibly manually create a DynamoDB item, manually upload draft to S3, then manually trigger SNS event.
+    - Check S3 output and DB after.
+  - Use AWS CLI or SDK to confirm outputs (like list bucket for new file, get content to confirm it matches expected HTML format).
+- **Error injection test in integration**:
+  - Purposefully misconfigure or break something to see if PublishFailure event is sent and how pipeline reacts:
+    - For instance, change the public bucket name to an incorrect one in a test deploy or environment variable to force S3 put failure (bucket not found or access denied). Then send an event:
+      - Expect to see in logs and maybe in error SNS subscriber that a PublishFailure happened.
+      - Check that the content was not uploaded (shouldn't exist).
+      - And confirm the error event came through (if we have a test subscriber).
+    - Another approach: feed a markdown content that maybe the conversion library might have an issue with (though unlikely, we can attempt something like an extremely long word or weird formatting to see if library fails; not easy to force an error without hacking the library).
+    - Or simulate environment lacking permissions (like remove the role permission in dev to put S3 object) to test error path. But that requires IAM change which maybe not convenient. Possibly skip, as unit tests can cover logic for that scenario.
+    - These tests ensure that even if something goes wrong, the pipeline signals it, and no partial side-effects (like check that Dynamo didn't update if it was supposed to update after failure).
+- **Performance observation**:
+  - Not a typical integration test, but we can publish a moderately large content (maybe artificially create a markdown of 50k characters) and measure how long it took via logs. This can show if it's comfortably within limits. Could do in dev environment and observe logs.
+- **Multiple content test**:
+  - In dev, try publishing two events concurrently (if possible):
+    - Could either use threading or send two SNS messages at same time. The Lambda likely handles sequentially if concurrency 1 in dev, unless we adjust concurrency. Perhaps set concurrency 2 and see if AWS triggers two concurrently.
+    - Or simulate by invoking the Lambda directly in quick succession on separate threads or processes (but direct invocation vs SNS might not fully simulate concurrency in same environment).
+    - If done, check that both outputs appear (two files in bucket) and no interference (like each had correct content).
+    - Check logs to see if one instance or two instances handled them concurrently (maybe two different request IDs).
+  - This assures concurrency works but expected to anyway because AWS separates executions.
+- **End-to-end pipeline (manual)**:
+  - Ideally, run a scenario from CMO all the way to Publish in a staging environment with one or two content pieces. Then physically verify the content is visible on the target site or bucket.
+  - e.g., after pipeline runs, open the S3 static site URL or if integrated with a real domain, open that domain to see if content accessible.
+  - That validates not only agent interactions but that the content is indeed delivered to end-users.
+- Document any manual steps needed to recover from a failure (maybe not part of automated tests but part of runbook, which we have in Operational sections).
+- Integration test for "published content accessible":
+  - Possibly write a small script that after publish agent finishes (subscribe to ContentPublished events in dev), it fetches the public URL (if accessible publicly even in dev) to ensure it returns expected content (HTTP 200 and contains known string).
+  - That would truly confirm end-user perspective.
+  - For dev, if no domain, can access S3 website endpoint if configured. If not configured, skip this test.
 ### 11.3 Contract Tests
-ContentReviewed to Publish contract: Ensure the event fields the Publish agent expects from Review agent are present and correctly named. If using content-reviewed-v1.json, validate a sample ReviewCompleted event (maybe from actual Review test or documentation) against our code:
-E.g., the code expects content_id key. Confirm schema says content_id. If it was contentId and we mis-match, that's a contract error to catch.
-If slug or topic is part of event (maybe we decide to include topic in ReviewCompleted event), verify our code can handle if it's there or not.
-Published event schema: Validate that the ContentPublished event we send conforms to content-published-v1.json.
-For example, if schema expects content_id and url, ensure we include those and correct types (string).
-Possibly use a JSON schema validator in a test, constructing the event as our code would and validate it.
-System integration contract: Optionally, cross-verify that the CMO or any other part might listen to ContentPublished. Possibly the CMO agent might in future subscribe to ContentPublished to update some metrics (phase1 not really, but maybe).
-If so, ensure the event has whatever fields they'd need (like maybe content_id and topic to know what's published). If we think future uses, including topic or title in ContentPublished might be useful for analytics/humans. Not specified but could consider adding it. Not doing explicit contract test since no current consumer, but thinking ahead.
-Bucket/URL contract: If front-end expects content at a certain path or naming convention, verify we adhere to that. E.g., if the site front-end code expects all blog posts to be in /posts/ prefix and named by slug, ensure our slug logic meets their naming rules (no uppercase, no spaces, etc.).
-This might be more an architecture test. Possibly the "System Architecture Overview" doc might define URL scheme. We test that our output path aligns.
-For example, if site uses slug plus date (like 2025-06-11-ai-in-finance.html but we omitted date, we might be breaking contract with expected site structure).
-Clarify such with team. For now assume simpler route where site lists just uses whatever we produce.
-DynamoDB content record contract: If other parts of system (like CFO or analytics) read the DynamoDB records, ensure we fill the fields they expect. For instance, if an analytics script expects status to eventually become 'published' and an url field present, we do that.
-If published_at is expected to be in certain format (ISO8601?), ensure we store in correct format (maybe as an ISO string or epoch). Possibly the architecture doc might have guidance. If not, we just pick a sensible format (ISO string or epoch as Number).
-Later if a reporting tool reads it, they'd adapt anyway. So minor contract to consider.
+- **ContentReviewed to Publish contract**: Ensure the event fields the Publish agent expects from Review agent are present and correctly named. If using content-reviewed-v1.json, validate a sample ReviewCompleted event (maybe from actual Review test or documentation) against our code:
+  - E.g., the code expects content_id key. Confirm schema says content_id. If it was contentId and we mis-match, that's a contract error to catch.
+  - If slug or topic is part of event (maybe we decide to include topic in ReviewCompleted event), verify our code can handle if it's there or not.
+- **Published event schema**: Validate that the ContentPublished event we send conforms to content-published-v1.json.
+  - For example, if schema expects content_id and url, ensure we include those and correct types (string).
+  - Possibly use a JSON schema validator in a test, constructing the event as our code would and validate it.
+- **System integration contract**: Optionally, cross-verify that the CMO or any other part might listen to ContentPublished. Possibly the CMO agent might in future subscribe to ContentPublished to update some metrics (phase1 not really, but maybe).
+  - If so, ensure the event has whatever fields they'd need (like maybe content_id and topic to know what's published). If we think future uses, including topic or title in ContentPublished might be useful for analytics/humans. Not specified but could consider adding it. Not doing explicit contract test since no current consumer, but thinking ahead.
+- **Bucket/URL contract**: If front-end expects content at a certain path or naming convention, verify we adhere to that. E.g., if the site front-end code expects all blog posts to be in /posts/ prefix and named by slug, ensure our slug logic meets their naming rules (no uppercase, no spaces, etc.).
+  - This might be more an architecture test. Possibly the "System Architecture Overview" doc might define URL scheme. We test that our output path aligns.
+  - For example, if site uses slug plus date (like 2025-06-11-ai-in-finance.html but we omitted date, we might be breaking contract with expected site structure).
+  - Clarify such with team. For now assume simpler route where site lists just uses whatever we produce.
+- **DynamoDB content record contract**: If other parts of system (like CFO or analytics) read the DynamoDB records, ensure we fill the fields they expect. For instance, if an analytics script expects status to eventually become 'published' and an url field present, we do that.
+  - If published_at is expected to be in certain format (ISO8601?), ensure we store in correct format (maybe as an ISO string or epoch). Possibly the architecture doc might have guidance. If not, we just pick a sensible format (ISO string or epoch as Number).
+  - Later if a reporting tool reads it, they'd adapt anyway. So minor contract to consider.
 ### 11.4 Load/Stress Tests
-High Volume Simulation: Though Phase 1 won't encounter it, we could test the publish agent with a larger number of events to ensure no resources leak or any possible throttling:
-For example, write a script to invoke the Lambda function 20 times sequentially with different content ids and small markdown to simulate backlog.
-Monitor memory usage or time. Likely fine, but ensures no cumulative slowdown.
-If concurrency 2, maybe try launching 4 events at once (we did small in integration, could try larger like 10 concurrently by quickly sending messages, SNS might spawn up to concurrency threads).
-Confirm all finished and produced outputs.
-Check CloudWatch for any concurrency throttle logs (none expected as we set concurrency limit).
-If we simulate extremely large markdown (like artificially 1MB text), see if it still processes within time. Should but if not, we consider raising memory (which also raises CPU).
-CloudFront rate test: CloudFront API has limit ~ invalidations per minute (like 1 per minute default, could be more with paid plan). If we publish 5 at once and we call 5 invalidations, maybe the 5th could get rate-limited. We might not catch that until at scale.
-For test, one could try sending a loop of invalidations quickly to see if AWS returns a Throttling error. If it does, we might consider if we need to batch or throttle calls.
-However, Phase 1 likely low frequency, so not urgent.
-Possibly note that if we did have to publish many at once, a better approach is to group them in one invalidation call (which can accept multiple paths).
-We didn't implement grouping because not needed at low volume. If needed, we might adapt to collect all paths to invalidate up to some limit and call one invalidation after processing all, but that complicates pipeline as separate published events combining, so likely not needed.
-Resource usage monitoring: If possible, run a lambda in performance mode and check actual memory usage through CloudWatch (there’s metric for memory used). It should be far below 256MB. Possibly not an automated test but an observation in dev/prod with one large content to confirm headroom.
-Soak Test: Not necessary given low usage, but running the pipeline repeatedly over a day to see if any latent issues (like memory leak if container reused many times).
-Lambdas typically don't leak memory across invocations drastically (and even if they did, container resets occasionally).
-Could simulate by invoking same function 100 times with small content and see if any slowdown (timing each) or if memory usage creeps up (difficult to measure precisely without X-Ray memory info).
-Likely fine due to short stateless operations.
+- **High Volume Simulation**: Though Phase 1 won't encounter it, we could test the publish agent with a larger number of events to ensure no resources leak or any possible throttling:
+  - For example, write a script to invoke the Lambda function 20 times sequentially with different content ids and small markdown to simulate backlog.
+  - Monitor memory usage or time. Likely fine, but ensures no cumulative slowdown.
+  - If concurrency 2, maybe try launching 4 events at once (we did small in integration, could try larger like 10 concurrently by quickly sending messages, SNS might spawn up to concurrency threads).
+  - Confirm all finished and produced outputs.
+  - Check CloudWatch for any concurrency throttle logs (none expected as we set concurrency limit).
+  - If we simulate extremely large markdown (like artificially 1MB text), see if it still processes within time. Should but if not, we consider raising memory (which also raises CPU).
+- **CloudFront rate test**: CloudFront API has limit ~ invalidations per minute (like 1 per minute default, could be more with paid plan). If we publish 5 at once and we call 5 invalidations, maybe the 5th could get rate-limited. We might not catch that until at scale.
+  - For test, one could try sending a loop of invalidations quickly to see if AWS returns a Throttling error. If it does, we might consider if we need to batch or throttle calls.
+  - However, Phase 1 likely low frequency, so not urgent.
+  - Possibly note that if we did have to publish many at once, a better approach is to group them in one invalidation call (which can accept multiple paths).
+  - We didn't implement grouping because not needed at low volume. If needed, we might adapt to collect all paths to invalidate up to some limit and call one invalidation after processing all, but that complicates pipeline as separate published events combining, so likely not needed.
+- **Resource usage monitoring**: If possible, run a lambda in performance mode and check actual memory usage through CloudWatch (there’s metric for memory used). It should be far below 256MB. Possibly not an automated test but an observation in dev/prod with one large content to confirm headroom.
+- **Soak Test**: Not necessary given low usage, but running the pipeline repeatedly over a day to see if any latent issues (like memory leak if container reused many times).
+  - Lambdas typically don't leak memory across invocations drastically (and even if they did, container resets occasionally).
+  - Could simulate by invoking same function 100 times with small content and see if any slowdown (timing each) or if memory usage creeps up (difficult to measure precisely without X-Ray memory info).
+  - Likely fine due to short stateless operations.
 12. Operational Runbooks
 ### 12.1 Standard Deployment Steps
-Deployment is orchestrated by CI/CD:
-Developer merges code changes for the Publish agent. This triggers the pipeline to run tests (including new/modified tests for publishing).
-If tests pass, CI builds the Lambda package (zips code and dependencies).
-Terraform (or CloudFormation) is applied to update the Lambda function code and any config changes (like new env var, new IAM perms if we added CloudFront invalidation).
-Typically, the SNS subscription remains the same (Terraform likely sets it up once and not needed each deploy unless we changed topics or function names).
-The new code is published as a new version, and the alias (e.g., "prod") is updated to it (depending on deployment strategy).
-After deployment:
-Confirm in AWS console or CLI that the Publish Lambda's code has updated (maybe by version number or a log line from new version).
-Possibly run a quick test in dev environment first, then deploy to prod. If using separate stages, might have separate pipeline triggers or manual promotion.
-Pre-deployment checks:
-Ensure any new environment variables (like if we introduced PUBLIC_BUCKET etc. different from before) are set in Terraform to correct values for each environment.
-If we changed IAM (like adding CloudFront perms), ensure those changes are included and applied. Mistakes in IAM can cause runtime errors.
-If using CloudFront for first time, confirm the distribution ID is correctly configured and that invalidation call has the needed role perms.
-Post-deployment:
-Monitor the next content through pipeline.
-If content is not expected soon, maybe trigger a test manually (in production careful, but maybe a harmless test content).
-Or coordinate with content team to schedule a post-deploy content release to see pipeline in action.
-Check CloudWatch Logs of the Publish agent after it runs on a content:
-Look for "Published content..." log or any errors.
-Check the site to ensure content appears as expected.
-If anything is off (content not on site, error logs), be ready to rollback quickly (see below).
-Typically, because this agent touches user-facing content, doing deployments at a low-traffic time might be wise (though content publishing might not be continuous anyway).
-Document the deployment in change log or notify relevant stakeholders (so content team knows if any changes in process).
-If deployment involved a new feature like new template or something visible in published pages, double-check that the output is correct format (e.g., new CSS link included).
-For Blue/Green:
-Possibly test new code on a sample by temporarily pointing dev topic to new function or running it manually. But since it's not user facing until it publishes content, it's simpler to just deploy and watch carefully as above.
-Also consider that in case of not fully automated pipeline, sometimes content team might hold content requests during a deployment to avoid overlap. But pipeline small enough, probably not needed.
+- **Deployment is orchestrated by CI/CD**:
+  - Developer merges code changes for the Publish agent. This triggers the pipeline to run tests (including new/modified tests for publishing).
+  - If tests pass, CI builds the Lambda package (zips code and dependencies).
+  - Terraform (or CloudFormation) is applied to update the Lambda function code and any config changes (like new env var, new IAM perms if we added CloudFront invalidation).
+  - Typically, the SNS subscription remains the same (Terraform likely sets it up once and not needed each deploy unless we changed topics or function names).
+  - The new code is published as a new version, and the alias (e.g., "prod") is updated to it (depending on deployment strategy).
+- After deployment:
+  - Confirm in AWS console or CLI that the Publish Lambda's code has updated (maybe by version number or a log line from new version).
+  - Possibly run a quick test in dev environment first, then deploy to prod. If using separate stages, might have separate pipeline triggers or manual promotion.
+- **Pre-deployment checks**:
+  - Ensure any new environment variables (like if we introduced PUBLIC_BUCKET etc. different from before) are set in Terraform to correct values for each environment.
+  - If we changed IAM (like adding CloudFront perms), ensure those changes are included and applied. Mistakes in IAM can cause runtime errors.
+  - If using CloudFront for first time, confirm the distribution ID is correctly configured and that invalidation call has the needed role perms.
+- **Post-deployment**:
+  - Monitor the next content through pipeline.
+    - If content is not expected soon, maybe trigger a test manually (in production careful, but maybe a harmless test content).
+    - Or coordinate with content team to schedule a post-deploy content release to see pipeline in action.
+  - Check CloudWatch Logs of the Publish agent after it runs on a content:
+    - Look for "Published content..." log or any errors.
+    - Check the site to ensure content appears as expected.
+  - If anything is off (content not on site, error logs), be ready to rollback quickly (see below).
+- Typically, because this agent touches user-facing content, doing deployments at a low-traffic time might be wise (though content publishing might not be continuous anyway).
+- Document the deployment in change log or notify relevant stakeholders (so content team knows if any changes in process).
+- If deployment involved a new feature like new template or something visible in published pages, double-check that the output is correct format (e.g., new CSS link included).
+- For Blue/Green:
+  - Possibly test new code on a sample by temporarily pointing dev topic to new function or running it manually. But since it's not user facing until it publishes content, it's simpler to just deploy and watch carefully as above.
+- Also consider that in case of not fully automated pipeline, sometimes content team might hold content requests during a deployment to avoid overlap. But pipeline small enough, probably not needed.
 ### 12.2 Rollback Procedure
-Immediate rollback via Lambda alias: If the new publish agent is failing to publish content or otherwise malfunctioning, revert to previous version:
-In AWS Lambda console or via CLI, point the alias (which SNS uses) back to the last version. This takes effect immediately for new events.
-This assumes the previous code was left as a version (which is typical).
-If we not using aliases, we might redeploy the old package. But best to use alias for quick swap.
-SNS considerations: The SNS subscription is typically to the alias ARN (if properly configured via Lambda alias). If it's to the function's unqualified ARN, then an alias change may not redirect SNS events (because SNS might be pointed to a specific function version?). Actually, by default, SNS to Lambda uses an unqualified ARN which means current $LATEST or any update. If we deployed by updating function code, SNS triggers automatically use new code.
-If we want blue/green, we'd have to subscribe alias specifically (supported as of AWS partial, possibly have to do via triggers?).
-Let's assume standard: SNS triggers always use whatever code is current. So to rollback, we could redeploy old code from history or have to push a quick fix commit to revert.
-If alias method was used (subscribe alias), then alias switching works.
-For speed, one might maintain two separate Lambda functions for blue/green but that complicates pipeline triggers. Likely not doing that in Phase 1.
-So likely rollback is just deploying the previous known-good commit (maybe via CI revert).
-But since content volume is low, if something is wrong, the damage isn't too widespread by the time we catch it (maybe one or two content items).
-Manual fallback for content: If publish agent is down or buggy:
-The content can be published manually by an operator as a stop-gap:
-They could copy the draft markdown, convert it manually or use an external tool, and upload to the site bucket themselves.
-Or run the publish Lambda code manually with fixed code via console if possible.
-Or temporarily set an environment variable to skip conversion if conversion was the issue and content could be published as markdown if the site can handle it (less likely).
-Inform content team if a piece will be delayed or had to be manually done.
-After rollback, any content that was supposed to publish during the bad deployment might need reprocessing:
-If the publish agent sent a failure, presumably the pipeline stops. The content remains approved in DB but not published.
-In rollback scenario, either we:
-Replay the ReviewCompleted events (e.g., manually re-send them from logs or have content team trigger something) to let the stable agent handle them.
-Or manually publish those few pieces that got stuck.
-Possibly the easiest in-phase1: if one piece failed, after fix or rollback, content team or dev can manually call the Publish Lambda (using test event with that content_id) to push it out.
-Or could trigger the review agent to re-send the event (but no built-in, so manual step).
-Keep track of which content items weren't published due to issue and ensure they eventually do.
-Root cause and fix forward: Once stabilized with rollback, analyze logs to identify the bug. Possibly write a quick patch and redeploy when ready.
-Communicate to stakeholders (content team, etc.) what happened if content was delayed or any visible effect (like formatting glitch on site).
-If any content was published incorrectly (e.g., wrong format template), decide if we need to fix those items after the fix:
-E.g., if our new code published without HTML header and site needs that, the page might display weird. Those items might need to be republished with correct format once fixed.
-So possibly mark them to re-publish. This can be done by a manual republish or leaving as is if not catastrophic.
-Check if any residual side-effects from bug: e.g., DB statuses inconsistent or double entries. Usually not likely since we update one item.
-But if the new code erroneously updated DB incorrectly (like cleared fields), rollback code should fix going forward but might need to manually correct those DB entries if critical.
-Typically, the DB just might have 'reviewed' status but not 'published' if fail. After fix, republish will update to published.
-Keep the older stable package handy if needed to redeploy directly in emergency. If CI can deploy a specific version by commit or artifact, know that process.
+- **Immediate rollback via Lambda alias**: If the new publish agent is failing to publish content or otherwise malfunctioning, revert to previous version:
+  - In AWS Lambda console or via CLI, point the alias (which SNS uses) back to the last version. This takes effect immediately for new events.
+  - This assumes the previous code was left as a version (which is typical).
+  - If we not using aliases, we might redeploy the old package. But best to use alias for quick swap.
+- **SNS considerations**: The SNS subscription is typically to the alias ARN (if properly configured via Lambda alias). If it's to the function's unqualified ARN, then an alias change may not redirect SNS events (because SNS might be pointed to a specific function version?). Actually, by default, SNS to Lambda uses an unqualified ARN which means current $LATEST or any update. If we deployed by updating function code, SNS triggers automatically use new code.
+  - If we want blue/green, we'd have to subscribe alias specifically (supported as of AWS partial, possibly have to do via triggers?).
+  - Let's assume standard: SNS triggers always use whatever code is current. So to rollback, we could redeploy old code from history or have to push a quick fix commit to revert.
+  - If alias method was used (subscribe alias), then alias switching works.
+  - For speed, one might maintain two separate Lambda functions for blue/green but that complicates pipeline triggers. Likely not doing that in Phase 1.
+  - So likely rollback is just deploying the previous known-good commit (maybe via CI revert).
+  - But since content volume is low, if something is wrong, the damage isn't too widespread by the time we catch it (maybe one or two content items).
+- **Manual fallback for content**: If publish agent is down or buggy:
+  - The content can be published manually by an operator as a stop-gap:
+    - They could copy the draft markdown, convert it manually or use an external tool, and upload to the site bucket themselves.
+    - Or run the publish Lambda code manually with fixed code via console if possible.
+    - Or temporarily set an environment variable to skip conversion if conversion was the issue and content could be published as markdown if the site can handle it (less likely).
+  - Inform content team if a piece will be delayed or had to be manually done.
+  - After rollback, any content that was supposed to publish during the bad deployment might need reprocessing:
+    - If the publish agent sent a failure, presumably the pipeline stops. The content remains approved in DB but not published.
+    - In rollback scenario, either we:
+      - Replay the ReviewCompleted events (e.g., manually re-send them from logs or have content team trigger something) to let the stable agent handle them.
+      - Or manually publish those few pieces that got stuck.
+    -Possibly the easiest in-phase1: if one piece failed, after fix or rollback, content team or dev can manually call the Publish Lambda (using test event with that content_id) to push it out.
+      - Or could trigger the review agent to re-send the event (but no built-in, so manual step).
+  - Keep track of which content items weren't published due to issue and ensure they eventually do.
+- **Root cause and fix forward**: Once stabilized with rollback, analyze logs to identify the bug. Possibly write a quick patch and redeploy when ready.
+- Communicate to stakeholders (content team, etc.) what happened if content was delayed or any visible effect (like formatting glitch on site).
+- If any content was published incorrectly (e.g., wrong format template), decide if we need to fix those items after the fix:
+  - E.g., if our new code published without HTML header and site needs that, the page might display weird. Those items might need to be republished with correct format once fixed.
+  - So possibly mark them to re-publish. This can be done by a manual republish or leaving as is if not catastrophic.
+- Check if any residual side-effects from bug: e.g., DB statuses inconsistent or double entries. Usually not likely since we update one item.
+  - But if the new code erroneously updated DB incorrectly (like cleared fields), rollback code should fix going forward but might need to manually correct those DB entries if critical.
+  - Typically, the DB just might have 'reviewed' status but not 'published' if fail. After fix, republish will update to published.
+- Keep the older stable package handy if needed to redeploy directly in emergency. If CI can deploy a specific version by commit or artifact, know that process.
 ### 12.3 Common Incident Diagnostics
-Content Not Appearing on Site:
-Check if a ReviewCompleted event for that content was processed by Publish:
-Look at CloudWatch Logs for the Publish Lambda around the time. Is there an entry for that content_id? If yes, see if it shows success or error.
-If no entry, maybe the event never triggered (subscribe issue or earlier pipeline broke). Possibly check SNS metrics or DLQ for unprocessed events.
-If logs show success, then likely the content is published but perhaps in a location not visible (maybe wrong bucket or slug).
-Check the S3 bucket manually to see if the file exists (looking for content_id or slug). Maybe a slug mis-generation (like slug is empty so file named ".html" or something).
-If file is present, maybe the site (CloudFront or DNS) isn't pointing to correct place. Check if the site expecting files in a certain prefix. Possibly path mismatch.
-If file not present in bucket but logs claimed success, maybe there was a silent error or a race condition. Unlikely, but maybe Dynamo update succeeded but file upload didn't actually happen? Check CloudTrail for PutObject event for that content_id to confirm.
-If logs show an error:
-Identify error (e.g., "Upload failed because Access Denied" means IAM issues).
-Use error message to find cause:
-Access Denied -> maybe bucket policy missing? Or our role not permitted. Possibly a misconfiguration (like wrong bucket name used or forgot to allow in policy).
-Conversion error -> maybe a bug with a particular markdown syntax. If so, we might manually fix content (like if a table caused an issue, maybe remove table as a workaround).
-"NoSuchBucket" -> our config might have wrong bucket name or bucket not created in that env. Check env var and actual bucket existence.
-CloudFront error -> not critical for content appearance (just caching).
-Once cause known, implement fix:
-IAM/Access issues: adjust policy or bucket settings quickly.
-Code bug (like conversion): maybe circumvent by manually editing content or quickly patch code to handle the edge case (if minor, could do quick fix).
-Config error: correct environment variable via quick update (less overhead than full code deploy).
-Meanwhile, if content is urgent, publish it manually (download markdown, run a known good converter or copy to site).
-After fix, republish content (manually or via pipeline re-run).
-If multiple contents not appearing, likely a systemic issue (like none published for last N hours).
-Could be the entire agent is failing (maybe crashed on a particular content and stuck? But since we handle errors gracefully, one stuck content would not block others ideally).
-Or maybe SNS subscription broke (rare but if someone removed the trigger).
-Check if any publishes succeeded recently. If none, maybe function disabled? Check Lambda metrics (Invocations vs Errors).
-Possibly an AWS outage affecting S3 or similar (in that case pipeline might fail at publishing stage).
-For AWS outage, content might queue (if SNS keeps events and tries later) or fail. If fail, our agent likely caught and gave up with error events.
-If S3 was down, we'd see errors for each attempt.
-In such external downtime, not much to do except wait and manually communicate to stakeholders that publishing will resume when AWS resolves issues.
-Site shows broken format content:
-e.g., content is published but appears without proper formatting (maybe missing HTML header or CSS).
-Possibly our template logic might be wrong, or we forgot to link CSS.
-If it's our oversight, we might need to update the publish agent to include whatever is missing (like adding a <head> section linking a stylesheet).
-As immediate fix, we could manually edit the published file to insert needed parts (since it's static).
-Or redeploy agent with fix and republish content. If small number, manual fix might suffice for immediate, then update agent for future.
-Also confirm if it's indeed agent's fault or maybe content itself expected a different environment. Eg: If using a separate static site generator in production (maybe not here).
-Check differences between a working older post (if any) and these new ones. Perhaps older site content had a template and our direct publish lacks it.
-If so, coordinate with web team: maybe they planned to apply a template externally (if not, our agent must do it).
-Solve by either:
-Adjust agent to output full HTML (if it didn't).
-Or if site is static but uses a client-side logic, ensure at least title and content are properly placed (maybe the site had a generic index that loads posts via JS, but we didn't provide any hooking? Probably not in Phase 1).
-If multiple posts share broken styling, fix agent and republish them as needed.
-Delayed CloudFront propagation:
-After publishing, maybe the website still shows old content or 404 for a short time because CloudFront cached empty file.
-If we didn't invalidate (or if invalidation is slow or not done), content might not be immediately visible on site.
-Confirm if the file is in S3 (if yes, then likely a caching issue).
-If we suspect that, do a manual CloudFront invalidation via console for that path, see if it appears.
-To remedy systematically, ensure our agent triggers invalidation as it should. If we omitted it and see caching issues, implement it for next time.
-In the short term, clear CloudFront or tell users to add cache-bypass query param to see content if urgent.
-Permission Issues on content file:
-If site returns 403 for the new content:
-Possibly our uploaded object isn't public. Check ACL or bucket policy:
-Many modern static sites rely on bucket policy granting read access to all objects under certain prefix. If our object is in correct prefix, maybe bucket policy covers it. If not, maybe we needed to set ACL "public-read" on put (not if bucket policy covers it).
-Check object metadata in S3: if it's not accessible, maybe bucket policy didn't apply (some bucket policies require specific tag or prefix).
-Quick fix: set ACL via manual or allow our agent to set ACL. But AWS now encourages using bucket policy only, so ensure the object key falls under an allowed prefix.
-Possibly we put it under a prefix that isn't allowed. Eg: policy allows /posts/* but we put at root or a different directory. If we mis-placed file, move it or adjust policy or output path.
-If using the same bucket as draft but that is private by default, we may have expected the final output in a separate bucket configured for public. If we accidentally uploaded to the private bucket's another prefix, it won't be accessible.
-Check if PUBLIC_BUCKET_NAME was correct. Could be we left it as the same content bucket which might not be web-accessible.
-Fix by ensuring it's in the site bucket. Possibly a config error in env.
-So in summary:
-Confirm correct bucket usage.
-Confirm bucket policy or ACL allows public read.
-Then re-upload (or set ACL on existing object if needing quick fix).
-Going forward, adjust agent or config:
-If needed, agent can call put_object(..., ACL='public-read'). But if we have correct policy we shouldn't have to.
-Check AWS account security settings: some accounts by default block public ACLs, then must rely on bucket policy.
-If a mis-placed location, fix code to use right bucket/prefix.
-Scale or performance issues:
-Not expected in Phase 1, but if, say, in Phase 2 volume increases and publishing seems to lag:
-Possibly content generation outpacing publishing if concurrency too low. If we notice backlog (maybe multiple approved content waiting because publish is slow), an operator might see many items in DB stuck at "reviewed" not "published" and error count is zero. That hints maybe concurrency limit or a performance problem causing backlog.
-Check CloudWatch metrics: if concurrency is at max frequently and queue backlog building, you might see some "ConcurrentExecutions Throttled" metrics on the Lambda.
-If so, raise concurrency limit accordingly in config.
-If code performance is issue (rare given the tasks), see which part is slow via X-Ray or logs, and consider optimizations or scaling out (like splitting tasks if one Lambda run was doing heavy multiple content at once, but we do one at time).
-Possibly CloudFront limit issues if too many invalidations:
-Could get an alert from AWS if we exceed free invalidations. If pipeline grew that large, consider bundling invalidations or raising distribution config.
-Ad-hoc requests:
-Content or marketing team might ask: "We need to update a published piece (typo fix or additional info)". Phase 1 has no automated update pipeline.
-On operations side, either:
-Re-run ContentGen with new prompt (not exactly update, that's create new content).
-Or manually edit in S3 (quick fix for a typo).
-Communicate that Phase 1 doesn't handle iterative editing; likely they'd handle small edits manually by direct S3 edit or by pulling content back through pipeline (not trivial).
-Make note to consider an "update content" flow in future enhancements, possibly as part of Review agent or a separate iteration agent.
+- **Content Not Appearing on Site**:
+  - Check if a ReviewCompleted event for that content was processed by Publish:
+    - Look at CloudWatch Logs for the Publish Lambda around the time. Is there an entry for that content_id? If yes, see if it shows success or error.
+    - If no entry, maybe the event never triggered (subscribe issue or earlier pipeline broke). Possibly check SNS metrics or DLQ for unprocessed events.
+    - If logs show success, then likely the content is published but perhaps in a location not visible (maybe wrong bucket or slug).
+      - Check the S3 bucket manually to see if the file exists (looking for content_id or slug). Maybe a slug mis-generation (like slug is empty so file named ".html" or something).
+      - If file is present, maybe the site (CloudFront or DNS) isn't pointing to correct place. Check if the site expecting files in a certain prefix. Possibly path mismatch.
+      - If file not present in bucket but logs claimed success, maybe there was a silent error or a race condition. Unlikely, but maybe Dynamo update succeeded but file upload didn't actually happen? Check CloudTrail for PutObject event for that content_id to confirm.
+    - If logs show an error:
+      - Identify error (e.g., "Upload failed because Access Denied" means IAM issues).
+      - Use error message to find cause:
+        - Access Denied -> maybe bucket policy missing? Or our role not permitted. Possibly a misconfiguration (like wrong bucket name used or forgot to allow in policy).
+        - Conversion error -> maybe a bug with a particular markdown syntax. If so, we might manually fix content (like if a table caused an issue, maybe remove table as a workaround).
+        - "NoSuchBucket" -> our config might have wrong bucket name or bucket not created in that env. Check env var and actual bucket existence.
+        - CloudFront error -> not critical for content appearance (just caching).
+      - Once cause known, implement fix:
+        - IAM/Access issues: adjust policy or bucket settings quickly.
+        - Code bug (like conversion): maybe circumvent by manually editing content or quickly patch code to handle the edge case (if minor, could do quick fix).
+        - Config error: correct environment variable via quick update (less overhead than full code deploy).
+      - Meanwhile, if content is urgent, publish it manually (download markdown, run a known good converter or copy to site).
+    - After fix, republish content (manually or via pipeline re-run).
+  - If multiple contents not appearing, likely a systemic issue (like none published for last N hours).
+    - Could be the entire agent is failing (maybe crashed on a particular content and stuck? But since we handle errors gracefully, one stuck content would not block others ideally).
+    - Or maybe SNS subscription broke (rare but if someone removed the trigger).
+    - Check if any publishes succeeded recently. If none, maybe function disabled? Check Lambda metrics (Invocations vs Errors).
+    - Possibly an AWS outage affecting S3 or similar (in that case pipeline might fail at publishing stage).
+    - For AWS outage, content might queue (if SNS keeps events and tries later) or fail. If fail, our agent likely caught and gave up with error events.
+    - If S3 was down, we'd see errors for each attempt.
+    - In such external downtime, not much to do except wait and manually communicate to stakeholders that publishing will resume when AWS resolves issues.
+- **Site shows broken format content**:
+  - e.g., content is published but appears without proper formatting (maybe missing HTML header or CSS).
+  - Possibly our template logic might be wrong, or we forgot to link CSS.
+  - If it's our oversight, we might need to update the publish agent to include whatever is missing (like adding a <head> section linking a stylesheet).
+  - As immediate fix, we could manually edit the published file to insert needed parts (since it's static).
+  - Or redeploy agent with fix and republish content. If small number, manual fix might suffice for immediate, then update agent for future.
+  - Also confirm if it's indeed agent's fault or maybe content itself expected a different environment. Eg: If using a separate static site generator in production (maybe not here).
+  - Check differences between a working older post (if any) and these new ones. Perhaps older site content had a template and our direct publish lacks it.
+  - If so, coordinate with web team: maybe they planned to apply a template externally (if not, our agent must do it).
+  - Solve by either:
+    - Adjust agent to output full HTML (if it didn't).
+    - Or if site is static but uses a client-side logic, ensure at least title and content are properly placed (maybe the site had a generic index that loads posts via JS, but we didn't provide any hooking? Probably not in Phase 1).
+  - If multiple posts share broken styling, fix agent and republish them as needed.
+- **Delayed CloudFront propagation**:
+  - After publishing, maybe the website still shows old content or 404 for a short time because CloudFront cached empty file.
+  - If we didn't invalidate (or if invalidation is slow or not done), content might not be immediately visible on site.
+  - Confirm if the file is in S3 (if yes, then likely a caching issue).
+  - If we suspect that, do a manual CloudFront invalidation via console for that path, see if it appears.
+  - To remedy systematically, ensure our agent triggers invalidation as it should. If we omitted it and see caching issues, implement it for next time.
+  - In the short term, clear CloudFront or tell users to add cache-bypass query param to see content if urgent.
+- **Permission Issues on content file**:
+  - If site returns 403 for the new content:
+    - Possibly our uploaded object isn't public. Check ACL or bucket policy:
+      - Many modern static sites rely on bucket policy granting read access to all objects under certain prefix. If our object is in correct prefix, maybe bucket policy covers it. If not, maybe we needed to set ACL "public-read" on put (not if bucket policy covers it).
+      - Check object metadata in S3: if it's not accessible, maybe bucket policy didn't apply (some bucket policies require specific tag or prefix).
+      - Quick fix: set ACL via manual or allow our agent to set ACL. But AWS now encourages using bucket policy only, so ensure the object key falls under an allowed prefix.
+      - Possibly we put it under a prefix that isn't allowed. Eg: policy allows /posts/* but we put at root or a different directory. If we mis-placed file, move it or adjust policy or output path.
+      - If using the same bucket as draft but that is private by default, we may have expected the final output in a separate bucket configured for public. If we accidentally uploaded to the private bucket's another prefix, it won't be accessible.
+      - Check if PUBLIC_BUCKET_NAME was correct. Could be we left it as the same content bucket which might not be web-accessible.
+    - Fix by ensuring it's in the site bucket. Possibly a config error in env.
+  So in summary:
+      - Confirm correct bucket usage.
+      - Confirm bucket policy or ACL allows public read.
+      - Then re-upload (or set ACL on existing object if needing quick fix).
+    - Going forward, adjust agent or config:
+      - If needed, agent can call put_object(..., ACL='public-read'). But if we have correct policy we shouldn't have to.
+      - Check AWS account security settings: some accounts by default block public ACLs, then must rely on bucket policy.
+      - If a mis-placed location, fix code to use right bucket/prefix.
+- **Scale or performance issues**:
+  - Not expected in Phase 1, but if, say, in Phase 2 volume increases and publishing seems to lag:
+    - Possibly content generation outpacing publishing if concurrency too low. If we notice backlog (maybe multiple approved content waiting because publish is slow), an operator might see many items in DB stuck at "reviewed" not "published" and error count is zero. That hints maybe concurrency limit or a performance problem causing backlog.
+    - Check CloudWatch metrics: if concurrency is at max frequently and queue backlog building, you might see some "ConcurrentExecutions Throttled" metrics on the Lambda.
+    - If so, raise concurrency limit accordingly in config.
+    - If code performance is issue (rare given the tasks), see which part is slow via X-Ray or logs, and consider optimizations or scaling out (like splitting tasks if one Lambda run was doing heavy multiple content at once, but we do one at time).
+  - Possibly CloudFront limit issues if too many invalidations:
+    - Could get an alert from AWS if we exceed free invalidations. If pipeline grew that large, consider bundling invalidations or raising distribution config.
+- **Ad-hoc requests**:
+  - Content or marketing team might ask: "We need to update a published piece (typo fix or additional info)". Phase 1 has no automated update pipeline.
+    - On operations side, either:
+    - Re-run ContentGen with new prompt (not exactly update, that's create new content).
+    - Or manually edit in S3 (quick fix for a typo).
+    - Communicate that Phase 1 doesn't handle iterative editing; likely they'd handle small edits manually by direct S3 edit or by pulling content back through pipeline (not trivial).
+    - Make note to consider an "update content" flow in future enhancements, possibly as part of Review agent or a separate iteration agent.
 ### 12.4 Known Limitations
-No Multi-Channel: The Publish agent currently only puts content to the web static bucket. It doesn’t propagate content to other channels (e.g., email newsletters, social media). So, if marketing wants content on multiple platforms, Phase 1 doesn’t cover it. This would be a future extension.
-No Rollback of Published Content: Once content is published, the pipeline doesn’t have an automatic way to unpublish or rollback if an issue is found post-publish. The content would have to be manually removed from the site if necessary. This is noted as a limitation; future phases or a manual procedure covers it.
-Simplistic SEO/Metadata: The current publishing doesn’t add meta tags (like description, keywords, Open Graph tags) or structured data to the HTML. It’s basically raw article HTML. That might be fine for an initial blog, but for advanced SEO, additional metadata might be needed. This is a limitation in quality of publishing.
-Formatting Constraints: If the markdown content uses advanced features (tables, footnotes), the simple markdown-to-HTML conversion might not handle them well (maybe requiring extensions). In Phase 1, content is assumed straightforward. Anything exotic might break or not render ideally. We accepted this risk for MVP.
-Manual Site Integration: The agent assumes an S3 static site. If the company later moves to a CMS, this agent would need a redesign or replacement. The current design is not abstracted to easily switch output targets (though we could change the publish method in code, it’s tightly coupled to S3).
-No Content Aggregation: The agent doesn’t update indexes or feeds (e.g., an RSS feed or a homepage list). That means after publishing multiple articles, there’s no automatic homepage update to link to them (unless homepage is dynamic or maybe listing all files in the bucket). This might be solved outside our pipeline or left manual in Phase 1, but it’s a known gap for a fully functional blog.
-Operational Silence on Success: Apart from metrics, we don’t notify anyone on successful publishes (which might be fine, but maybe marketing might want an email "Your article X is now live"). This is a feature not implemented. As a result, they have to manually check the site to know it’s live. Possibly okay for Phase 1 scale.
-Content File Retention: We keep draft and final content indefinitely. Over time, drafts could accumulate. Not a big cost, but some might consider cleaning them. Phase 1 doesn’t address that (and it’s fine given low volume).
-Time Synchronization: If content scheduling was needed (publish at a future time), this agent doesn’t handle it. It publishes immediately on event. Phase 1 uses immediate mode only. This is fine now, but a limitation if timed release was desired (future maybe hooking into EventBridge scheduler or a delay).
-Potential Single Point: If for any reason the publish agent fails, it halts content going live. We partially mitigate by error alerts, but still, it is a single Lambda controlling output. In a more critical scenario, one might want redundancy or fallback. Phase 1 relies on AWS reliability and manual interventions rather than having multiple methods to publish.
-Security of Public Content: If content should be behind auth (not the case here, all public), that would require a different approach (like leaving bucket private and serving via an authenticated channel). Phase 1 assumes all published content is fully public. So any requirement for restricting content is not handled.
-Analytics Integration: The agent doesn’t inject any tracking scripts or analytics codes into content. If marketing wants Google Analytics or similar, that needs to be present in the site template (outside our pipeline) or we would have to modify content with such snippet. Not done in Phase 1, so published pages will have no tracking unless the static site template includes it (if we had a global template, which we might not). This is an operational insight – if they realize no analytics, they might later embed a script tag via the publishing pipeline or static site configuration.
+- **No Multi-Channel**-: The Publish agent currently only puts content to the web static bucket. It doesn’t propagate content to other channels (e.g., email newsletters, social media). So, if marketing wants content on multiple platforms, Phase 1 doesn’t cover it. This would be a future extension.
+- **No Rollback of Published Content**: Once content is published, the pipeline doesn’t have an automatic way to unpublish or rollback if an issue is found post-publish. The content would have to be manually removed from the site if necessary. This is noted as a limitation; future phases or a manual procedure covers it.
+- **Simplistic SEO/Metadata**: The current publishing doesn’t add meta tags (like description, keywords, Open Graph tags) or structured data to the HTML. It’s basically raw article HTML. That might be fine for an initial blog, but for advanced SEO, additional metadata might be needed. This is a limitation in quality of publishing.
+- **Formatting Constraints**: If the markdown content uses advanced features (tables, footnotes), the simple markdown-to-HTML conversion might not handle them well (maybe requiring extensions). In Phase 1, content is assumed straightforward. Anything exotic might break or not render ideally. We accepted this risk for MVP.
+- **Manual Site Integration**: The agent assumes an S3 static site. If the company later moves to a CMS, this agent would need a redesign or replacement. The current design is not abstracted to easily switch output targets (though we could change the publish method in code, it’s tightly coupled to S3).
+- **No Content Aggregation**: The agent doesn’t update indexes or feeds (e.g., an RSS feed or a homepage list). That means after publishing multiple articles, there’s no automatic homepage update to link to them (unless homepage is dynamic or maybe listing all files in the bucket). This might be solved outside our pipeline or left manual in Phase 1, but it’s a known gap for a fully functional blog.
+- **Operational Silence on Success**: Apart from metrics, we don’t notify anyone on successful publishes (which might be fine, but maybe marketing might want an email "Your article X is now live"). This is a feature not implemented. As a result, they have to manually check the site to know it’s live. Possibly okay for Phase 1 scale.
+- **Content File Retention**: We keep draft and final content indefinitely. Over time, drafts could accumulate. Not a big cost, but some might consider cleaning them. Phase 1 doesn’t address that (and it’s fine given low volume).
+- **Time Synchronization**: If content scheduling was needed (publish at a future time), this agent doesn’t handle it. It publishes immediately on event. Phase 1 uses immediate mode only. This is fine now, but a limitation if timed release was desired (future maybe hooking into EventBridge scheduler or a delay).
+- **Potential Single Point**: If for any reason the publish agent fails, it halts content going live. We partially mitigate by error alerts, but still, it is a single Lambda controlling output. In a more critical scenario, one might want redundancy or fallback. Phase 1 relies on AWS reliability and manual interventions rather than having multiple methods to publish.
+- **Security of Public Content**: If content should be behind auth (not the case here, all public), that would require a different approach (like leaving bucket private and serving via an authenticated channel). Phase 1 assumes all published content is fully public. So any requirement for restricting content is not handled.
+- **Analytics Integration**: The agent doesn’t inject any tracking scripts or analytics codes into content. If marketing wants Google Analytics or similar, that needs to be present in the site template (outside our pipeline) or we would have to modify content with such snippet. Not done in Phase 1, so published pages will have no tracking unless the static site template includes it (if we had a global template, which we might not). This is an operational insight – if they realize no analytics, they might later embed a script tag via the publishing pipeline or static site configuration.
 13. Future Enhancements
 ### 13.1 Planned Phase 2+ Capabilities
 Multi-Channel Publishing: Extend the agent (or add new ones) to publish content to other platforms. For example, automatically post a link and excerpt to social media (Twitter, LinkedIn) or cross-post the article to a Medium blog. This could be triggers off the ContentPublished event. The current agent might remain for website, while new sub-agents handle other channels.
