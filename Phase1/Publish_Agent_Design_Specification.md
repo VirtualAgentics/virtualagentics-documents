@@ -101,12 +101,18 @@ None. The Publish agent is entirely event-driven and does not expose any web API
 (*If using a CMS API or database, those would appear here, but Phase 1 uses S3 for content presumably.*)
 
 ## 4.4 External Service Calls
-Possibly CloudFront Invalidation API: If the site is served via CloudFront, after uploading new content, the agent might call CloudFront to invalidate the cache for that content or update an index page. If so, it requires an external AWS API call (cloudfront:CreateInvalidation).
-Not sure if Phase 1 includes a CloudFront distribution for site, but likely yes if static site approach. We'll include it as a possible call.
-Possibly Email/Slack Notification: Not a core requirement, but one could imagine the Publish agent pinging a Slack channel “New article published: {title}”. If that were done, it’d be an external webhook call. Phase 1 didn’t specify it, so skip.
-If the architecture was different (like publishing to WordPress via REST API), that would be external. However, it appears we stick to AWS static site. So:
-CloudFront: if needed (external to Lambda in the sense of a separate AWS service API).
-Otherwise, no third-party services.
+
+- **Possibly CloudFront Invalidation API**:  
+  If the site is served via CloudFront, after uploading new content, the agent might call CloudFront to invalidate the cache for that content or update an index page. If so, it requires an external AWS API call (`cloudfront:CreateInvalidation`).
+  - Not sure if Phase 1 includes a CloudFront distribution for site, but likely yes if static site approach. We'll include it as a possible call.
+
+- **Possibly Email/Slack Notification**:  
+  Not a core requirement, but one could imagine the Publish agent pinging a Slack channel “New article published: {title}”. If that were done, it’d be an external webhook call. Phase 1 didn’t specify it, so skip.
+
+- If the architecture was different (like publishing to WordPress via REST API), that would be external. However, it appears we stick to AWS static site. So:
+  - **CloudFront**: if needed (external to Lambda in the sense of a separate AWS service API).
+  - Otherwise, no third-party services.
+
 ## 5. Inputs & Outputs
 ### 5.1 Input Catalogue
 Inputs come from the ReviewCompleted event and any referenced data:
