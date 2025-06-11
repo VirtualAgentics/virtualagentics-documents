@@ -124,6 +124,19 @@ Inputs come from the ReviewCompleted event and any referenced data:
 | format (flag) | String | Possibly event or config | Optional | Indicates format of content (e.g., "markdown") so the agent knows if conversion is needed. By default assume markdown. |
 | approved_at | Timestamp | Event or DB | Optional | Not needed for function, but maybe recorded for completeness. |
 
+- *content_id*: Key identifier for the content. The publish agent will use this to fetch the content from S3 (the draft/ready file) and to update records. If missing or not found, publishing cannot proceed.
+
+- *content_topic*: The title or topic of the content. Might be included in the event for reference. The agent might use it to create a user-friendly file name or URL if not otherwise provided (e.g., "AI-in-Finance-How-It-Works" slug). If not provided, we can derive from content or use `content_id`.
+
+- *slug/filename*: In some architectures, the content's URL or filename might be predetermined (maybe the CMO or content generator decided a SEO slug). If the DynamoDB record has a field for slug, the publish agent should use that for naming the output file (like slug.html). If not, it might generate one from topic (like lowercase hyphenated topic). Needs validation to strip unsafe chars, etc. If still not available, fallback to `content_id` as file name (ensures uniqueness but not pretty).
+
+- *format*: If the event indicated the content is already HTML or some other format, the agent would publish accordingly without converting. In Phase 1, we assume the content is Markdown that needs conversion to HTML. Could be an implicit assumption rather than explicit input. We'll treat it as known config: "convert markdown to HTML."
+
+- *approved_at*: More for record, not needed to publish. Possibly used to set published date in some metadata (if generating HTML, might embed date). Could be drawn from event timestamp or record.
+
+The agent validates that `content_id` exists and that it can retrieve the content file. If those fail, it's error output time.
+
+
 content_id: Key identifier for the content. The publish agent will use this to fetch the content from S3 (the draft/ready file) and to update records. If missing or not found, publishing cannot proceed.
 content_topic: The title or topic of the content. Might be included in the event for reference. The agent might use it to create a user-friendly file name or URL if not otherwise provided (e.g., "AI-in-Finance-How-It-Works" slug). If not provided, we can derive from content or use content_id.
 slug/filename: In some architectures, the content's URL or filename might be predetermined (maybe the CMO or content generator decided a SEO slug). If the DynamoDB record has a field for slug, the publish agent should use that for naming the output file (like slug.html). If not, it might generate one from topic (like lowercase hyphenated topic). Needs validation to strip unsafe chars, etc. If still not available, fallback to content_id as file name (ensures uniqueness but not pretty).
@@ -138,6 +151,14 @@ Outputs include the actual published content artifact and events/logs:
 | content_status_update | DynamoDB item update | va-phase1-content table | Analytics/Reporting (content marked published) |
 | event: ContentPublished | Event | SNS topic /content/published (or similar) | (Future Analytics or confirmation logs) |
 
+- *published_content_file*: The core output – the article in final form in the public site store. For example, after conversion, an HTML file is placed in the website bucket. Consumers of this are outside the agent world: it’s the website front-end (could be a static site served via S3 or CloudFront) or users downloading the content. The presence of this file is essentially the end goal.
+
+- *content_status_update*: The agent updates the content’s database record to reflect that it’s published (status = `"published"`, published timestamp, and maybe the URL or path where it was published). This allows tracking and possibly the CMO agent to query how many have been published. It’s internal output used for reporting or future logic.
+
+- *ContentPublished event*: A final event broadcast. It might contain `content_id` and possibly the public URL (like https://site.com/posts/slug). In Phase 1, no active agent might listen, but we include it for completeness and in case a monitoring tool or analytic event collector picks it up. It’s good for decoupling – e.g., a future Analytics agent could subscribe and log web analytics setup.
+
+
+
 published_content_file: The core output – the article in final form in the public site store. For example, after conversion, an HTML file is placed in the website bucket. Consumers of this are outside the agent world: it’s the website front-end (could be a static site served via S3 or CloudFront) or users downloading the content. The presence of this file is essentially the end goal.
 content_status_update: The agent updates the content’s database record to reflect that it’s published (status = "published", published timestamp, and maybe the URL or path where it was published). This allows tracking and possibly the CMO agent to query how many have been published. It’s internal output used for reporting or future logic.
 ContentPublished event: A final event broadcast. It might contain content_id and possibly the public URL (like https://site.com/posts/slug). In Phase 1, no active agent might listen, but we include it for completeness and in case a monitoring tool or analytic event collector picks it up. It’s good for decoupling – e.g., a future Analytics agent could subscribe and log web analytics setup.
@@ -147,6 +168,13 @@ If publishing fails (e.g., can't upload, conversion error), the agent emits erro
 | --- | --- | --- | --- |
 | PublishFailure | Event | SNS /content/errors | Emitted if content cannot be published (e.g. S3 upload failed, conversion error). Contains content_id and error details. |
 | PublishPartial (optional) | Event | SNS /content/errors | Emitted if content is published but with issues (e.g., published but index update failed). Phase 1 probably not needed. |
+
+- *PublishFailure*: Covers any hard failure that means the content is not live. For example, inability to fetch the content file (should have been caught in review though, but if S3 had an outage), failure converting to HTML (maybe malformed markdown?), or S3 put failing due to permissions or network. The event will log the error and `content_id` so ops knows that content did not go live. Possibly, as there’s no automatic retry in Phase 1, someone might have to handle it manually.
+
+- *PublishPartial*: In more complex pipelines, you might have a scenario where content is *up* but some ancillary step failed. In Phase 1, not likely needed. For instance, if content published but sending `ContentPublished` event failed (somehow), that’s minor since content is live. We won't complicate with *partial*, we'll just treat anything not fully done as failure.
+
+All errors go to the common `/content/errors` topic. In Phase 1, an ops alarm would catch these so team can intervene. If a *PublishFailure* occurs, the content might remain in "reviewed but not published" state; resolution might involve manual publish or redeploying fix and reprocessing event.
+
 
 PublishFailure: Covers any hard failure that means the content is not live. For example, inability to fetch the content file (should have been caught in review though, but if S3 had an outage), failure converting to HTML (maybe malformed markdown?), or S3 put failing due to permissions or network. The event will log the error and content_id so ops knows that content did not go live. Possibly, as there’s no automatic retry in Phase 1, someone might have to handle it manually.
 PublishPartial: In more complex pipelines, you might have a scenario where content is up but some ancillary step failed. In Phase 1, not likely needed. For instance, if content published but sending ContentPublished event failed (somehow), that’s minor since content is live. We won't complicate with partial, we'll just treat anything not fully done as failure.
