@@ -39,7 +39,67 @@ Supports the autonomous pipeline by removing the need for manual content uploadi
 
 ## 2. Architecture & System Context
 ### 2.1 High-Level Context Diagram
-(Diagram to be inserted.) The Publish agent is implemented as an AWS Lambda triggered by an SNS topic for reviewed content (approval events). It retrieves the content (by content_id) from the internal content store (the same S3 bucket used for drafts, or maybe a separate staging area), then processes and transfers it to a public location (for instance, moving the file to a "published" prefix or different bucket accessible by the website). If needed, it converts markdown to HTML. The agent then signals completion. It interacts with AWS services like S3 and possibly DynamoDB (to update content status). There is no direct user interaction; the published content is consumed by web users via the website (which could be backed by that S3 or CMS).
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CMO as CMO Agent
+    participant Gen as ContentGen Agent
+    participant OpenAI as OpenAI API
+    participant S3 as S3 Storage
+    participant DB as DynamoDB
+    participant Review as Review Agent
+    participant Publish as Publish Agent
+    participant Site as Public Website
+    participant Errors as Error Event Log
+
+    %% Step 1: Initiation
+    CMO->>Gen: ContentRequest event
+
+    %% Step 2: Content Generation
+    Gen->>Gen: Validate input
+    alt Invalid input
+        Gen->>Errors: ValidationError event
+        Note right of Gen: Pipeline ends for this request
+    else Valid input
+        Gen->>OpenAI: Generate content (prompt)
+        alt OpenAI error
+            Gen->>Errors: GenFailure event
+            Note right of Gen: Pipeline ends for this request
+        else Content received
+            Gen->>S3: Store article (Markdown)
+            Gen->>DB: Store metadata
+            Gen->>Review: ContentReady event
+        end
+    end
+
+    %% Step 3: Review
+    Review->>S3: Retrieve draft content
+    Review->>DB: Retrieve metadata
+    Review->>Review: Run quality/compliance checks
+    alt Review fails
+        Review->>Errors: ContentRejected or ReviewError event
+        Note right of Review: Pipeline ends for this request
+    else Approved
+        Review->>S3: (Optional) Save minor fixes
+        Review->>DB: Update status (reviewed)
+        Review->>Publish: ReviewCompleted event
+    end
+
+    %% Step 4: Publish
+    Publish->>S3: Fetch reviewed content
+    Publish->>Publish: Convert Markdown to HTML
+    alt Publish fails
+        Publish->>Errors: PublishFailure event
+        Note right of Publish: Pipeline ends for this request
+    else Success
+        Publish->>S3: Upload HTML to public bucket
+        Publish->>DB: Update status (published)
+        Publish->>Site: (Content available to users)
+        Publish->>Publish: (Optional) CloudFront invalidation
+        Publish->>CMO: ContentPublished event (for analytics/logging)
+    end
+```
+The Publish agent is implemented as an AWS Lambda triggered by an SNS topic for reviewed content (approval events). It retrieves the content (by content_id) from the internal content store (the same S3 bucket used for drafts, or maybe a separate staging area), then processes and transfers it to a public location (for instance, moving the file to a "published" prefix or different bucket accessible by the website). If needed, it converts markdown to HTML. The agent then signals completion. It interacts with AWS services like S3 and possibly DynamoDB (to update content status). There is no direct user interaction; the published content is consumed by web users via the website (which could be backed by that S3 or CMS).
 ### 2.2 Deployment Target
 - **Platform**: AWS Lambda (Python 2.11 runtime).
 - **Environment**: Deployed to dev and prod, likely in the same environment as other Lambdas. It might need access to a different S3 bucket (the live site bucket) possibly in a public-facing zone. If the site bucket is public, Lambda may not need VPC. But if it’s internal, ensure correct VPC or endpoint. For our context, likely just normal S3 access.
