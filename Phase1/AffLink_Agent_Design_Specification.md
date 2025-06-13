@@ -1,4 +1,3 @@
-
 ---
 title: "AffLink Agent Design Specification"
 status: "Draft"
@@ -34,48 +33,53 @@ By limiting the scope to automated affiliate link insertion for textual content,
 
 ## 2. Architecture & System Context
 
-... (all content from the full doc above here, unabridged)
+### 2.1 High-Level Context Diagram
 
-## 3. Interfaces
+The following diagram illustrates the AffLink agent’s position in the Phase 1 pipeline and its interactions with other agents and system components:
 
-...
+```mermaid
+flowchart LR
+    subgraph "Phase 1 Content Pipeline"
+        CMO["CMO Agent (Orchestrator)"]
+        CG["ContentGen Agent (Lambda)"]
+        RV["Review Agent (Lambda)"]
+        AL["AffLink Agent (Lambda)"]
+        PB["Publish Agent (Lambda)"]
+    end
+    CMO -->|ContentRequest event| CG
+    CG -->|ContentGenerated event| RV
+    RV -->|ContentReviewed event| AL
+    AL -->|ContentEnriched event| PB
+    S3[(Content Repository - S3 Bucket)]
+    CG -.->|write content| S3
+    RV -.->|update content| S3
+    AL -.->|read & write content| S3
+    PB -.->|read content| S3
+```
 
-## 4. Inputs & Outputs
+In this context:
 
-...
+- **The CMO (Orchestrator) agent** initiates the workflow by dispatching a **ContentRequest** event to generate new content.
+- **The ContentGen agent** (content generator) produces a draft and stores the content (e.g., a Markdown file) in an S3 bucket. It then emits a **ContentGenerated** event.
+- **The Review agent** (optional in Phase 1) receives the generated content event. It may perform automated quality checks or adjustments, then updates the content in S3 (if necessary) and emits a **ContentReviewed** event to signal that the content is ready for monetization.
+- **The AffLink agent** (the focus of this document) is triggered by the reviewed-ready event. It retrieves the content from S3, inserts affiliate links, saves the enriched version back to S3, and emits a **ContentEnriched** event.
+- Finally, **the Publish agent** picks up the enriched content event and reads the final content from S3 for publication (e.g., posting to a website or CMS). It may then emit a **ContentPublished** event for confirmation or analytics.
 
-## 5. Internal Processing Logic
+All agents are event-driven AWS Lambda functions, and S3 serves as the content repository through which the content state (draft, reviewed, enriched) is persisted between stages. The arrows in the diagram indicate the flow of events (solid lines between agents) and the interactions with the content store (dotted lines to/from S3). This architecture ensures a loosely coupled pipeline where each agent focuses on a specific responsibility and communicates via events and shared storage.
 
-...
+### 2.2 Deployment Target
 
-## 6. Lifecycle Management
+The AffLink agent is deployed as an **AWS Lambda function (Python 3.11 runtime)** in the VirtualAgentics cloud environment. As a Lambda, it operates within a stateless, managed compute container and scales automatically with the incoming event load. Key details of the deployment context include:
 
-...
+- **AWS Environment:** The function runs in the **VirtualAgentics production AWS account**, within the same region and resource group as the content S3 bucket and event bus. This proximity ensures low-latency access to content objects and reliable event delivery. (Separate instances of the AffLink Lambda exist for non-production environments like dev or staging, following the same design but segregated resources.)
+- **Event Triggers:** The AffLink Lambda is configured to be invoked by two mechanisms:
+  - An **EventBridge rule** listens for the relevant pipeline event (e.g., `ContentReviewed` indicating content ready for affiliate linking) and triggers the Lambda with the event payload.
+  - Additionally, an **S3 PutObject event** on the content repository bucket (for example, a new or updated content file in a specific “reviewed” prefix) can trigger the Lambda. This S3 event acts as a backup trigger or alternate mechanism to initiate processing whenever a content file is finalized in the repository.
+  
+  In practice, the system may use one or the other (or both) trigger methods depending on the orchestration preference. In Phase 1, the design leans toward using the EventBridge event as the primary trigger (since it carries explicit metadata about the content), while the S3 event ensures **idempotency** and catches any cases where the event bus might miss an update.
+- **Networking and Dependencies:** The AffLink Lambda does not require access to any internal network resources (it primarily accesses S3 and AWS services over the AWS network). If external affiliate APIs were needed, the Lambda would either have outbound internet access (through a NAT gateway if placed in a VPC) or use hosted APIs via the internet. In Phase 1, no VPC integration is required, and the Lambda uses the default AWS Lambda internet access to communicate with AWS services (S3, EventBridge, CloudWatch, etc.).
+- **Configuration:** Deployment includes setting environment variables or configurations for the Lambda, such as the S3 bucket name, target S3 key prefix for enriched content, and any affiliate program identifiers (for example, an affiliate tag or tracking ID used in constructing links). These values are injected at deploy time (via Terraform or AWS SAM templates) rather than hard-coded, allowing flexibility across environments.
+- **Lifecycle Management:** The Lambda is deployed and managed via the VirtualAgentics CI/CD pipeline. New versions of the code (for improvements or bug fixes) are released by updating the Lambda function code (or Lambda container image) and updating the associated infrastructure (event triggers, IAM role, etc.) through infrastructure-as-code definitions. This is covered in more detail in **Chapter 6: Lifecycle Management**.
 
-## 7. Security & Compliance
+By deploying the AffLink agent as an AWS Lambda, the system benefits from automatic scaling, high availability, and managed runtime without the need to provision servers. The Lambda’s ephemeral nature (spinning up on demand in response to events) aligns well with the sporadic, event-driven workload of content processing in the Phase 1 pipeline.
 
-...
-
-## 8. Observability
-
-...
-
-## 9. Performance & Scaling
-
-...
-
-## 10. Testing Strategy
-
-...
-
-## 11. Operational Runbooks
-
-...
-
-## 12. Future Enhancements
-
-...
-
----
-
-*End of Document*
