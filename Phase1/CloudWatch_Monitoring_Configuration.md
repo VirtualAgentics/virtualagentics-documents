@@ -123,7 +123,7 @@ Critical CloudWatch Metrics tracked for Phase 1:
 
 - All CloudWatch alarms for the Phase 1 pipeline notify the `#virtualagentics-alerts` Slack channel via SNS subscription and email the on-call DevOps team.
 - For critical/paging alerts (e.g., errors, throttling), PagerDuty is triggered.
-- Engineers should consult the relevant agent’s [Operational Runbook](Agent_Runbook_Template.md) when an alarm fires for mitigation guidance.
+- Engineers should consult the relevant agent’s [Operational Runbook](../Standard_Guidelines/Template/Agent_Runbook_Template.md) when an alarm fires for mitigation guidance.
 
 ---
 
