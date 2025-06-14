@@ -58,24 +58,51 @@ module "contentgen_lambda" {
 }
 ```
 
-- Artifact bucket/key provided by CI/CD.
-- IAM role created unless `create_role` is false, which requires existing role ARN.
-- VPC integration optional.
-
 ## Inputs
-(As detailed previously)
+
+| Name                    | Type         | Default | Description                                           |
+|-------------------------|--------------|---------|-------------------------------------------------------|
+| `function_name`         | string       | -       | Lambda function name (required).                      |
+| `code_s3_bucket`        | string       | -       | Bucket where Lambda code artifact is stored.          |
+| `code_s3_key`           | string       | -       | Path within bucket to Lambda artifact (required).     |
+| `runtime`               | string       | -       | Runtime environment (e.g., python3.9).                |
+| `handler`               | string       | -       | Function entry point (required).                      |
+| `memory_size`           | number       | 128     | Memory size allocated to Lambda function.             |
+| `timeout`               | number       | 30      | Lambda function execution timeout (seconds).          |
+| `environment_variables` | map(string)  | {}      | Environment variables for Lambda execution context.   |
+| `create_role`           | bool         | true    | Whether module creates IAM role.                      |
+| `role_name`             | string       | -       | Name of IAM role if created.                          |
+| `additional_policies`   | list(string) | []      | IAM policies attached to created role.                |
+| `existing_role_arn`     | string       | -       | ARN of external IAM role if not created by module.    |
+| `tags`                  | map(string)  | {}      | Tags applied to all resources.                        |
 
 ## Outputs
-(As detailed previously)
+
+| Output Name            | Description                     |
+|------------------------|---------------------------------|
+| `lambda_function_arn`  | ARN of deployed Lambda function.|
+| `lambda_function_name` | Name of Lambda function.        |
+| `role_arn`             | ARN of IAM role if created.     |
 
 ## Example Scenarios
-(As detailed previously)
+
+- Deploying Review Lambda with similar patterns.
+- Scheduled Lambda (Publish agent) invoked daily using EventBridge rule (supported by additional module parameters).
 
 ## Dependencies/Prerequisites
-(As detailed previously)
+
+- S3 artifact bucket must exist.
+- Required IAM roles/VPC resources must be pre-created.
+- Any additional resources (S3, DynamoDB) referenced in Lambda code must exist prior.
 
 ## Testing
-(As detailed previously)
+
+- Validate deployment in AWS Lambda console.
+- Trigger manually or via configured events.
+- Verify IAM permissions (Secrets Manager, S3).
+- Check CloudWatch Logs for proper logging.
+- Execute `terraform validate` to ensure correctness.
 
 ## Versioning
+
 Semantic versioning in `virtualagentics-iac` repository. Lambda function code versioning handled separately by CI/CD pipelines; module focuses on infrastructure changes and enhancements.
