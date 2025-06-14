@@ -51,22 +51,53 @@ module "workmail" {
 ```
 
 ## Inputs
-(as previously detailed)
+
+| Name                     | Type    | Default | Description                                  |
+|--------------------------|---------|---------|----------------------------------------------|
+| `organization_name`      | string  | -       | Name for WorkMail organization.              |
+| `domain_name`            | string  | -       | Domain name associated with WorkMail.        |
+| `create_mailbox_user`    | bool    | false   | Toggles creation of a mailbox user.          |
+| `mailbox_user_name`      | string  | -       | Username for mailbox user.                   |
+| `mailbox_display_name`   | string  | -       | Display name for mailbox user.               |
+| `mailbox_password`       | string  | -       | Password for mailbox (securely handled).     |
+| `enable_alias_forwarding`| bool    | false   | Enables alias forwarding to a mailbox user.  |
+| `alias_forward_target`   | string  | -       | Mailbox user receiving alias forwarded emails.|
+| `tags`                   | map     | {}      | Tags for module resources (if applicable).   |
 
 ## Outputs
-(as previously detailed)
+
+| Output Name          | Description                            |
+|----------------------|----------------------------------------|
+| `organization_id`    | ID of created WorkMail organization.   |
+| `mailbox_user_id`    | ID of the created mailbox user.        |
+| `mailbox_email`      | Email address of created mailbox user. |
 
 ## Example Use Cases
-(as previously detailed)
+
+- Establishing managed email (e.g., prod@virtualagentics.ai) as AWS root account contact.
+- Future agent-driven communications via configured WorkMail mailbox.
+- Ensuring centralized email management and notification capturing for operational purposes.
 
 ## Dependencies
-(as previously detailed)
+
+- Requires DNS records setup via VA-Route53 module for domain verification.
+- WorkMail availability within AWS account (Control Tower compliance checks recommended).
+- Secure handling and provisioning of mailbox passwords via AWS Secrets Manager.
 
 ## Testing
-(as previously detailed)
+
+- Verify WorkMail organization status in AWS console or CLI.
+- Confirm domain verification through WorkMail domain list.
+- Test inbound email reception by sending external test emails.
+- Validate outbound email via WorkMail web client or email client setup.
+- Confirm correct email alias and mailbox configurations.
 
 ## Security Considerations
-(as previously detailed)
+
+- Secure password handling via Secrets Manager or Terraform variables.
+- Domain verification and secure DNS configurations via VA-Route53 module.
+- Audit WorkMail mailbox accesses and email logs periodically.
 
 ## Versioning
-(as previously detailed)
+
+Module maintained using semantic versioning. Future mailbox or domain modifications will increment module version. Carefully review changes affecting email operations and domain configurations.
