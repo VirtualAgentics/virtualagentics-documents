@@ -145,7 +145,7 @@ Critical CloudWatch Metrics tracked for Phase 1:
 - **Retention:** CloudWatch Logs for all Lambdas and API Gateway are retained for **30 days**.
 - **Archiving:** No automated export to S3 at this time; can be enabled if regulatory requirements change.
 - **Access Control:** Only VirtualAgentics engineering/DevOps team members have access, via group-assigned IAM permissions.
-- **Auditing:** Access and changes to logs are tracked in AWS CloudTrail, reviewed quarterly per [Compliance_and_Security_Policies.md](Compliance_and_Security_Policies.md).
+- **Auditing:** Access and changes to logs are tracked in AWS CloudTrail, reviewed quarterly per [Compliance_and_Security_Policies.md](../Policies_Procedures/Compliance_and_Security_Policies.md).
 
 ---
 
@@ -159,8 +159,8 @@ Critical CloudWatch Metrics tracked for Phase 1:
 
 ## 7. References
 
-- [Monitoring_and_Alerting.md](Monitoring_and_Alerting.md) – Policy & requirements
-- [Agent_Runbook_Template.md](Agent_Runbook_Template.md) – Response procedures
+- [Monitoring_and_Alerting.md](../Policies_Procedures/Monitoring_and_Alerting.md) – Policy & requirements
+- [Agent_Runbook_Template.md](../Standards_Guidelines/Template/Agent_Runbook_Template.md) – Response procedures
 - AWS CloudWatch documentation: [Alarms](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html)
 - See Terraform module `cloudwatch_alerts.tf` for configuration-as-code
 
